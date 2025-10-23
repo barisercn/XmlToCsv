@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "/gNiP7XPSwA=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Barış\\Desktop\\veriÇekme\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Barış\\.nuget\\packages\\csvhelper\\33.1.0\\csvhelper.33.1.0.nupkg.sha512",
+    "C:\\Users\\Barış\\.nuget\\packages\\system.text.encoding.codepages\\8.0.0\\system.text.encoding.codepages.8.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}

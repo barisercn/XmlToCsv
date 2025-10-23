@@ -1,0 +1,95 @@
+.upload-wrap {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 2px 10px rgba(2, 6, 23, 0.04);
+}
+
+.upload-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 12px;
+}
+
+.dropzone {
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    background: #f8fafc;
+    transition: opacity .2s ease, border-color .2s ease;
+    margin-bottom: 16px;
+}
+
+.dropzone.is-uploading {
+    opacity: .7;
+    border-color: #94a3b8;
+}
+
+.dropzone p {
+    margin: 0 0 8px;
+    color: #334155;
+}
+
+.hint {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.file-list {
+    margin-top: 12px;
+    display: grid;
+    gap: 8px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.file-meta {
+    display: grid;
+    gap: 2px;
+}
+
+.file-name {
+    font-weight: 600;
+}
+
+.file-size {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.badge {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #eef2ff;
+    border: 1px solid #e0e7ff;
+    color: #3730a3;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.messages {
+    margin-top: 16px;
+    border-top: 1px dashed #e5e7eb;
+    padding-top: 12px;
+    font-size: 14px;
+}
+
+.messages .msg {
+    margin-bottom: 6px;
+}

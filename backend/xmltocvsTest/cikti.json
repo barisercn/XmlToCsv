@@ -1,0 +1,317 @@
+{
+  "Kaynak": "C:\\Users\\Bar\u0131\u015F\\Downloads\\sample_relational_dataset.xml",
+  "AdUzaylari": {},
+  "AdayKayitlar": [
+    {
+      "KayitYolu": "/Names/Entity/Entities/Records/Dataset/Name",
+      "TahminiKayitSayisi": 570,
+      "Alanlar": [
+        {
+          "Yol": "./@type",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "primary",
+            "aka",
+            "primary",
+            "aka",
+            "primary"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 7,
+          "YaklasikFarkliDegerSayisi": 3,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/Dates/Entity/Entities/Records/Dataset/Date",
+      "TahminiKayitSayisi": 420,
+      "Alanlar": [
+        {
+          "Yol": "./@type",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "inc",
+            "upd",
+            "inc",
+            "upd",
+            "inc"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 3,
+          "YaklasikFarkliDegerSayisi": 3,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/Identifiers/Entity/Entities/Records/Dataset/Id",
+      "TahminiKayitSayisi": 360,
+      "Alanlar": [
+        {
+          "Yol": "./@type",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "TAX",
+            "TAX",
+            "TAX",
+            "TAX",
+            "TAX"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 3,
+          "YaklasikFarkliDegerSayisi": 3,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/Entities/Records/Dataset/Entity",
+      "TahminiKayitSayisi": 210,
+      "Alanlar": [
+        {
+          "Yol": "./@id",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "ORG0001",
+            "ORG0002",
+            "ORG0003",
+            "ORG0004",
+            "ORG0005"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 7,
+          "YaklasikFarkliDegerSayisi": 210,
+          "Notlar": []
+        },
+        {
+          "Yol": "./@type",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "Organization",
+            "Organization",
+            "Organization",
+            "Organization",
+            "Organization"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 12,
+          "YaklasikFarkliDegerSayisi": 2,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/Entity/Entities/Records/Dataset/Country",
+      "TahminiKayitSayisi": 210,
+      "Alanlar": [
+        {
+          "Yol": "./@code",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "US",
+            "GB",
+            "US",
+            "US",
+            "TR"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 2,
+          "YaklasikFarkliDegerSayisi": 10,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/Address/Addresses/Entity/Entities/Records/Dataset/Country",
+      "TahminiKayitSayisi": 210,
+      "Alanlar": [
+        {
+          "Yol": "./@code",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "US",
+            "GB",
+            "US",
+            "US",
+            "TR"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 2,
+          "YaklasikFarkliDegerSayisi": 10,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/Sanctions/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationship/Relationships/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Role/Roles/Records/Dataset/Sanction",
+      "TahminiKayitSayisi": 17,
+      "Alanlar": [
+        {
+          "Yol": "./@authority",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "UK HMT",
+            "UK HMT",
+            "Canada SEMA",
+            "OFAC",
+            "UN"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 11,
+          "YaklasikFarkliDegerSayisi": 5,
+          "Notlar": []
+        },
+        {
+          "Yol": "./@dateListed",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "2014-01-17",
+            "2017-11-15",
+            "2011-07-25",
+            "2021-11-24",
+            "2013-07-13"
+          ],
+          "CikarilanTur": "DateTime",
+          "MaksKarakterUzunlugu": 10,
+          "YaklasikFarkliDegerSayisi": 17,
+          "Notlar": []
+        },
+        {
+          "Yol": "./@id",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "SANCT-1003",
+            "SANCT-1004",
+            "SANCT-1005",
+            "SANCT-1006",
+            "SANCT-1007"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 10,
+          "YaklasikFarkliDegerSayisi": 17,
+          "Notlar": []
+        },
+        {
+          "Yol": "./@targetRef",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "ORG0019",
+            "ORG0046",
+            "PER00037",
+            "ORG0013",
+            "PER00108"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 8,
+          "YaklasikFarkliDegerSayisi": 17,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/CountryList/Dictionaries/Dataset/Country",
+      "TahminiKayitSayisi": 10,
+      "Alanlar": [
+        {
+          "Yol": "./@code",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "TR",
+            "US",
+            "DE",
+            "GB",
+            "AZ"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 2,
+          "YaklasikFarkliDegerSayisi": 10,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/RelationshipTypeList/Dictionaries/Dataset/RelationshipType",
+      "TahminiKayitSayisi": 10,
+      "Alanlar": [
+        {
+          "Yol": "./@code",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "parent_of",
+            "spouse_of",
+            "sibling_of",
+            "employed_by",
+            "owns"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 11,
+          "YaklasikFarkliDegerSayisi": 10,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    },
+    {
+      "KayitYolu": "/RoleTypeList/Dictionaries/Dataset/RoleType",
+      "TahminiKayitSayisi": 7,
+      "Alanlar": [
+        {
+          "Yol": "./@code",
+          "Tur": "Attribute",
+          "Kardinalite": "0..1",
+          "Ornekler": [
+            "ceo",
+            "cfo",
+            "cto",
+            "director",
+            "owner"
+          ],
+          "CikarilanTur": "String",
+          "MaksKarakterUzunlugu": 8,
+          "YaklasikFarkliDegerSayisi": 7,
+          "Notlar": []
+        }
+      ],
+      "IcIceDiziler": [],
+      "Uyarilar": []
+    }
+  ],
+  "Bilgi": {
+    "SematikSurum": "1.0.0",
+    "UretimZamaniUtc": "2025-10-03T11:18:58.9244165Z",
+    "ParametreOzeti": "sample=20000; depth=4; minRepeat=5",
+    "TarananDugumSayisi": 10989,
+    "Notlar": []
+  }
+}
