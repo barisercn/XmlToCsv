@@ -50,6 +50,10 @@
               "target": "Package",
               "version": "[33.1.0, )"
             },
+            "Npgsql": {
+              "target": "Package",
+              "version": "[9.0.4, )"
+            },
             "System.Text.Encoding.CodePages": {
               "target": "Package",
               "version": "[8.0.0, )"

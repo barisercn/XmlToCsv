@@ -117,6 +117,35 @@ export default function FileUpload({
         setDownloadableFile(null);
         setBusyIndex(-1);
         if (inputRef.current) inputRef.current.value = null;
+    };// FileUpload.jsx içine eklenecek
+
+    const handleSaveToDb = async () => {
+        if (!downloadableFile) return;
+
+        setStatus("saving_db"); // Yeni durum
+        setMessages((m) => [...m, `Veritabanına kaydediliyor... Lütfen bekleyin.`]);
+
+        try {
+            const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+            const res = await fetch(`${BASE_URL}/api/dbyekaydet`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ fileName: downloadableFile }) // Zip dosyasının adını gönder
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || `Sunucu hatası: ${res.status}`);
+            }
+
+            const result = await res.json();
+            setMessages((m) => [...m, `✅ ${result.message}`]);
+            setStatus("done");
+
+        } catch (err) {
+            setMessages((m) => [...m, `❌ Veritabanı Kayıt Hatası: ${err.message}`]);
+            setStatus("error");
+        }
     };
 
     return (
@@ -209,9 +238,20 @@ export default function FileUpload({
                     >
                         {downloadableFile} İndir
                     </button>
+                    {/* YENİ BUTON */}
+                    <button
+                        type="button"
+                        className="btn btn-info" // Veya farklı bir stil
+                        onClick={handleSaveToDb} // Yeni fonksiyon
+                        disabled={status === 'uploading' || status === 'saving_db'}
+                        style={{ marginLeft: '10px' }}
+                    >
+                        {status === 'saving_db' ? 'Kaydediliyor...' : 'PostgreSQL\'e Kaydet'}
+                    </button>
                 </div>
-            )}
+            )
+            }
 
-        </div> // Burası upload-wrap'in kapanışı
+        </div > // Burası upload-wrap'in kapanışı
     );
 }

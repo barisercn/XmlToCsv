@@ -1,10 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "/gNiP7XPSwA=",
+  "dgSpecHash": "wYC1vWHQWcw=",
   "success": true,
   "projectFilePath": "C:\\Users\\Barış\\Desktop\\veriÇekme\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Barış\\.nuget\\packages\\csvhelper\\33.1.0\\csvhelper.33.1.0.nupkg.sha512",
+    "C:\\Users\\Barış\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
+    "C:\\Users\\Barış\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.2\\microsoft.extensions.logging.abstractions.8.0.2.nupkg.sha512",
+    "C:\\Users\\Barış\\.nuget\\packages\\npgsql\\9.0.4\\npgsql.9.0.4.nupkg.sha512",
     "C:\\Users\\Barış\\.nuget\\packages\\system.text.encoding.codepages\\8.0.0\\system.text.encoding.codepages.8.0.0.nupkg.sha512"
   ],
   "logs": []

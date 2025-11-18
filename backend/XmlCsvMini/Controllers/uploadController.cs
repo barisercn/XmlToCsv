@@ -93,7 +93,7 @@ namespace XmlCsvMini.Controllers
             // Dosyayı kullanıcıya gönderdikten sonra sunucudan silerek temizlik yapıyoruz.
             try
             {
-                System.IO.File.Delete(zipPath);
+                // System.IO.File.Delete(zipPath);
             }
             catch
             {

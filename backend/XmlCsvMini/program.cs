@@ -1,3 +1,5 @@
+using XmlCsvMini.Services;
+using XmlCsvMini.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Frontend'den (React uygulamasından) gelen isteklere izin vermek için CORS politikası ekliyoruz.
@@ -30,6 +32,7 @@ builder.Services.AddCors(options =>
 
 // Controller'ları (yani UploadController'ımızı) servis olarak ekliyoruz.
 builder.Services.AddControllers();
+builder.Services.AddScoped<IVeriAktarimServisi, VeriAktarimServisi>();
 
 var app = builder.Build();
 

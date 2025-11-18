@@ -27,3 +27,7 @@ C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\xmlCsvmini\obj\D
 C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\xmlCsvmini\obj\Debug\net8.0\staticwebassets\msbuild.buildTransitive.XmlCsvMini.props
 C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\xmlCsvmini\obj\Debug\net8.0\staticwebassets.pack.json
 C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\xmlCsvmini\obj\Debug\net8.0\scopedcss\bundle\XmlCsvMini.styles.css
+C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\XmlCsvMini\bin\Debug\net8.0\appsettings.json
+C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\XmlCsvMini\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\XmlCsvMini\bin\Debug\net8.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\Barış\Desktop\veriÇekme\TablolaraDonusturme\backend\XmlCsvMini\bin\Debug\net8.0\Npgsql.dll
