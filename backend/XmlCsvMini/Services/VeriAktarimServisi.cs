@@ -95,7 +95,7 @@ namespace XmlCsvMini.Services
 
                     // 👉 Her kolon için başlangıç tipi string kabul; ilerledikçe Infer/Merge ile genişlet
                     sutunOzeti = kolonAdlari
-                        .Select(ad => new SutunOzeti { Ad = ad, TanimlananTur = "unkown", Nullable = false, BosDegerSayisi = 0 })
+                        .Select(ad => new SutunOzeti { Ad = ad, TanimlananTur = "unknown", Nullable = false, BosDegerSayisi = 0 })
                         .ToArray();
 
                     string? line;
@@ -128,6 +128,7 @@ namespace XmlCsvMini.Services
                 // ---------- 2) Tabloyu oluştur (idempotent) ----------
                 // 👉 Keşfedilen kolon tiplerine göre CREATE TABLE IF NOT EXISTS
                 await CreateTargetTableAsync(conn, _schema, table, sutunOzeti, ct);
+
 
                 // ---------- 3) İkinci geçiş: COPY BINARY ile hızlı yaz ----------
                 // 👉 Şimdi aynı dosyayı tekrar okuyup gerçek veriyi tablonun kolonlarına basıyoruz
@@ -197,22 +198,26 @@ namespace XmlCsvMini.Services
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        private static async Task CreateTargetTableAsync(NpgsqlConnection conn, string schema, string table,
-                                                        SutunOzeti[] sutunlar, CancellationToken ct)
+        private static async Task CreateTargetTableAsync(
+            NpgsqlConnection conn, string schema, string table,
+            SutunOzeti[] sutunlar, CancellationToken ct)
         {
-            // 👉 Keşfedilen kolon tiplerini Postgres tipine map et ve tabloyu oluştur
             var colsSql = string.Join(", ",
                 sutunlar.Select(s => $"{QuoteIdent(s.Ad)} {PgTypeFor(s)}"));
 
             var sql = $@"
-CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
+CREATE SCHEMA IF NOT EXISTS {QuoteIdent(schema)};
+
+DROP TABLE IF EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)};
+
+CREATE TABLE {QuoteIdent(schema)}.{QuoteIdent(table)}
 (
     {colsSql}
 );";
+
             await using var cmd = new NpgsqlCommand(sql, conn);
             await cmd.ExecuteNonQueryAsync(ct);
         }
-
         private static string PgTypeFor(SutunOzeti s)
         {
             // 👉 Keşfedilen tip → PostgreSQL tipi
@@ -235,12 +240,14 @@ CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
         // ======================
         private static (object value, NpgsqlDbType type) ConvertToPgValue(string deger, string tip)
         {
-            // 👉 COPY binary yazımı için doğru türde değer üret
+            // 👉 COPY BINARY için string değeri doğru .NET tipi + NpgsqlDbType ile döndürür
             switch (tip)
             {
                 case "bool":
-                    if (bool.TryParse(deger, out var b)) return (b, NpgsqlDbType.Boolean);
-                    return (false, NpgsqlDbType.Boolean); // parse olmazsa güvenli default
+                    if (bool.TryParse(deger, out var b))
+                        return (b, NpgsqlDbType.Boolean);
+                    // Parse olmazsa güvenli default
+                    return (false, NpgsqlDbType.Boolean);
 
                 case "int":
                     if (long.TryParse(deger, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
@@ -257,52 +264,94 @@ CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
                     return (DBNull.Value, NpgsqlDbType.Numeric);
 
                 case "date":
-                    // 👉 Date'i binary importta DateTime (saat 00:00) göndermek pratik
+                    // Sadece tarih (saat 00:00). DB tarafında "date" kolonuna gider.
+                    if (string.IsNullOrWhiteSpace(deger))
+                        return (DBNull.Value, NpgsqlDbType.Date);
+
                     if (DateOnly.TryParse(deger, CultureInfo.InvariantCulture, out var dateOnly))
-                        return (dateOnly.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), NpgsqlDbType.Date);
-                    if (DateTime.TryParse(deger, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt0))
-                        return (dt0.Date, NpgsqlDbType.Date);
+                        return (dateOnly.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified),
+                                NpgsqlDbType.Date);
+
+                    if (DateTime.TryParse(deger, CultureInfo.InvariantCulture,
+                                          DateTimeStyles.None,
+                                          out var dtDate))
+                        return (dtDate.Date, NpgsqlDbType.Date);
+
                     return (DBNull.Value, NpgsqlDbType.Date);
 
                 case "datetime":
-                    if (DateTime.TryParse(deger, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt))
-                        return (dt, NpgsqlDbType.TimestampTz);
-                    if (DateTime.TryParse(deger, new CultureInfo("tr-TR"), DateTimeStyles.AssumeLocal, out dt))
-                        return (dt, NpgsqlDbType.TimestampTz);
-                    return (DBNull.Value, NpgsqlDbType.TimestampTz);
+                    if (string.IsNullOrWhiteSpace(deger))
+                        return (DBNull.Value, NpgsqlDbType.TimestampTz);
+
+                    // 1) Önce invariant kültürle dene (ISO tarzı formatlar için)
+                    if (!DateTime.TryParse(
+                            deger,
+                            CultureInfo.InvariantCulture,
+                            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                            out var dt)
+                        // 2) Olmazsa Türkçe kültürle dene
+                        && !DateTime.TryParse(
+                            deger,
+                            new CultureInfo("tr-TR"),
+                            DateTimeStyles.AssumeLocal,
+                            out dt))
+                    {
+                        // Hiçbir formatla parse edemezsek NULL yaz
+                        return (DBNull.Value, NpgsqlDbType.TimestampTz);
+                    }
+
+                    // 👉 Burada Kind'ı kesinleştiriyoruz ki Npgsql şikâyet etmesin
+                    if (dt.Kind == DateTimeKind.Unspecified)
+                    {
+                        // Timezone bilgisi yoksa "bu zaten UTC" diye işaretle
+                        dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+                    }
+                    else
+                    {
+                        // Local veya Utc ise → net olarak UTC'ye çevir
+                        dt = dt.ToUniversalTime();
+                    }
+
+                    return (dt, NpgsqlDbType.TimestampTz);
 
                 default:
+                    // Diğer her şey TEXT olarak yazılsın
                     return (deger, NpgsqlDbType.Text);
             }
         }
-
         // ======================
         // CSV & TİP KEŞFİ YARDIMCILARI
         // ======================
 
         private static IEnumerable<string?> SplitCsvLine(string line)
         {
-            // 👉 Basit CSV ayrıştırıcı: virgül ayırır; çift tırnak içindeki virgülleri korur; "" → " kaçışını destekler
+            // 👉 CSV ayrıştırıcı: hem ',' hem ';' ayırıcı olarak kabul eder.
+            // Çift tırnak içindeki ayırıcıları dikkate almaz.
+            // "" → " kaçışını destekler.
+
             var sb = new StringBuilder();
             bool inQuotes = false;
 
             for (int i = 0; i < line.Length; i++)
             {
                 char c = line[i];
+
                 if (c == '\"')
                 {
+                    // Kaçış durumu: "" → "
                     if (inQuotes && i + 1 < line.Length && line[i + 1] == '\"')
                     {
                         sb.Append('\"');
-                        i++; // kaçış
+                        i++; // Bir adım atla
                     }
                     else
                     {
-                        inQuotes = !inQuotes;
+                        inQuotes = !inQuotes; // Tırnak aç/kapa
                     }
                 }
-                else if (c == ',' && !inQuotes)
+                else if ((c == ',' || c == ';') && !inQuotes)
                 {
+                    // Ayırıcıya geldik → bir kolon tamamlandı
                     yield return sb.Length == 0 ? null : sb.ToString();
                     sb.Clear();
                 }
@@ -311,8 +360,11 @@ CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
                     sb.Append(c);
                 }
             }
+
+            // Son kolon
             yield return sb.Length == 0 ? null : sb.ToString();
         }
+
 
         private static string InferType(string value)
         {
@@ -391,6 +443,8 @@ CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
             if (char.IsDigit(s[0])) s = "_" + s;
             return s;
         }
+
+
 
         private static string QuoteIdent(string ident) => $"\"{ident}\""; // 👉 Postgres identifier'ı güvenli tırnakla
     }

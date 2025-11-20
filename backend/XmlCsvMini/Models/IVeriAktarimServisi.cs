@@ -26,7 +26,7 @@ namespace XmlCsvMini.Models
     public sealed class SutunOzeti
     {
         public string Ad { get; set; } = "";
-        public string TanimlananTur { get; set; } = "unkown"; // string,int,decimal,bool,date,datetime
+        public string TanimlananTur { get; set; } = "unknown"; // string,int,decimal,bool,date,datetime
         public bool Nullable { get; set; }
         public long BosDegerSayisi { get; set; }
     }

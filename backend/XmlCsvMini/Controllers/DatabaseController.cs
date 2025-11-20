@@ -50,7 +50,7 @@ namespace XmlCsvMini.Controllers
                 var sonuc = await _veriAktarimServisi.ZiptenVeritabaninaAktarAsync(zipYolu);
 
                 _gunluk.LogInformation($"{istek.DosyaAdi} veritabanına başarıyla aktarıldı.");
-                return Ok(new { mesaj = $"Veri aktarımı tamamlandı. {sonuc.AktarilanTabloSayisi} tablo, {sonuc.ToplamSatirSayisi} satır işlendi." });
+                return Ok(new { message = $"Veri aktarımı tamamlandı. {sonuc.AktarilanTabloSayisi} tablo, {sonuc.ToplamSatirSayisi} satır işlendi." });
             }
             catch (Exception hata)
             {
