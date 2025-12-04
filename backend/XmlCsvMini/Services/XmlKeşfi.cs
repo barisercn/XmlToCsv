@@ -217,12 +217,114 @@ namespace XmlCsvMini.Services
             return rapor;
 
             // ----- yardımcılar -----
-            bool EbeveynKumesi(string e, Dictionary<string, HashSet<string>> m, out HashSet<string> k) { if (!m.TryGetValue(e, out k!)) { k = new HashSet<string>(); m[e] = k; return false; } return true; }
-            void OrnekEkle((string e, string r) k, string? v) { if (string.IsNullOrWhiteSpace(v)) return; if (!alanOrnekleri.TryGetValue(k, out var l)) { l = new List<string>(); alanOrnekleri[k] = l; } if (l.Count < alanOrnekLimit) l.Add(v); if (!alanFarkliDeger.TryGetValue(k, out var h)) { h = new HashSet<string>(); alanFarkliDeger[k] = h; } if (h.Count < 1000) h.Add(v); }
-            void DiziSay(string e, string r) { var k = (e, r); ebeveynIcindekiDiziSayaci.TryAdd(k, 0); ebeveynIcindekiDiziSayaci[k]++; }
-            static string YolOlustur(List<string> y, string s) { if (y.Count == 0) return "/" + s; var sb = new StringBuilder(); foreach (var p in y) sb.Append('/').Append(p); sb.Append('/').Append(s); return sb.ToString(); }
-            static string OnerilenTabloAdi(string e, string r) { var p = e.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "P"; var c = r.Replace("./", ""); return $"{p}_{c}"; }
-            static CikarilanVeriTuru TuruCikar(IEnumerable<string> o) { bool i = true, d = true, b = true, dt = true, dtm = true; foreach (var s in o.Where(s => !string.IsNullOrWhiteSpace(s))) { if (i && !long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)) i = false; if (d && !decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out _)) d = false; if (b && !BoolMu(s)) b = false; if (dt && !TarihMi(s)) dt = false; if (dtm && !TarihSaatMi(s)) dtm = false; if (!i && !d && !b && !dt && !dtm) break; } if (i) return CikarilanVeriTuru.Integer; if (d) return CikarilanVeriTuru.Decimal; if (b) return CikarilanVeriTuru.Boolean; if (dtm) return CikarilanVeriTuru.DateTime; if (dt) return CikarilanVeriTuru.Date; return CikarilanVeriTuru.String; static bool BoolMu(string s) { var t = s.ToLowerInvariant(); return t is "true" or "false" or "1" or "0" or "y" or "n"; } static bool TarihMi(string s) { return DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) && d.TimeOfDay == TimeSpan.Zero; } static bool TarihSaatMi(string s) { return DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out _); } }
+            bool EbeveynKumesi(string e, Dictionary<string, HashSet<string>> m, out HashSet<string> k)
+            {
+                if (!m.TryGetValue(e, out k!))
+                {
+                    k = new HashSet<string>();
+                    m[e] = k;
+                    return false;
+                }
+                return true;
+            }
+
+            void OrnekEkle((string e, string r) k, string? v)
+            {
+                if (string.IsNullOrWhiteSpace(v)) return;
+
+                if (!alanOrnekleri.TryGetValue(k, out var l))
+                {
+                    l = new List<string>();
+                    alanOrnekleri[k] = l;
+                }
+                if (l.Count < alanOrnekLimit) l.Add(v);
+
+                if (!alanFarkliDeger.TryGetValue(k, out var h))
+                {
+                    h = new HashSet<string>();
+                    alanFarkliDeger[k] = h;
+                }
+                if (h.Count < 1000) h.Add(v);
+            }
+
+            void DiziSay(string e, string r)
+            {
+                var k = (e, r);
+                ebeveynIcindekiDiziSayaci.TryAdd(k, 0);
+                ebeveynIcindekiDiziSayaci[k]++;
+            }
+
+            static string YolOlustur(List<string> y, string s)
+            {
+                if (y.Count == 0) return "/" + s;
+                var sb = new StringBuilder();
+                foreach (var p in y) sb.Append('/').Append(p);
+                sb.Append('/').Append(s);
+                return sb.ToString();
+            }
+
+            // --- DEĞİŞTİRİLEN FONKSİYON BAŞLANGICI ---
+            static string OnerilenTabloAdi(string kayitYolu, string relYol)
+            {
+                // 1) Kayıt tipini çıkar (Person, Company, Event ...)
+                // Örn: "/Root/PersonList/Person" -> "Person"
+                var parcalar = kayitYolu.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                var kayitTipi = parcalar.Length > 0 ? parcalar[^1] : "Root";
+
+                // 2) Relatif yolu temizle ("./Addresses/Address" -> "addresses_address")
+                var temizRel = relYol
+                    .Replace("./", "")           // baştaki ./ kaldır
+                    .Replace("/", "_")           // içteki / -> _
+                    .Replace("@", "attr_")       // attribute'ler için prefix
+                    .Replace("text()", "text");  // text için sadeleştirme
+
+                // 3) Her şeyi küçük harfe çevir, Türkçe harfleri sadeleştir (opsiyonel)
+                kayitTipi = kayitTipi.ToLowerInvariant();
+                temizRel = temizRel.ToLowerInvariant();
+
+                // 4) "person_addresses_address" formatında döndür
+                return $"{kayitTipi}_{temizRel}";
+            }
+            // --- DEĞİŞTİRİLEN FONKSİYON SONU ---
+
+            static CikarilanVeriTuru TuruCikar(IEnumerable<string> o)
+            {
+                bool i = true, d = true, b = true, dt = true, dtm = true;
+                foreach (var s in o.Where(s => !string.IsNullOrWhiteSpace(s)))
+                {
+                    if (i && !long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)) i = false;
+                    if (d && !decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out _)) d = false;
+                    if (b && !BoolMu(s)) b = false;
+                    if (dt && !TarihMi(s)) dt = false;
+                    if (dtm && !TarihSaatMi(s)) dtm = false;
+
+                    if (!i && !d && !b && !dt && !dtm) break;
+                }
+
+                if (i) return CikarilanVeriTuru.Integer;
+                if (d) return CikarilanVeriTuru.Decimal;
+                if (b) return CikarilanVeriTuru.Boolean;
+                if (dtm) return CikarilanVeriTuru.DateTime;
+                if (dt) return CikarilanVeriTuru.Date;
+
+                return CikarilanVeriTuru.String;
+
+                static bool BoolMu(string s)
+                {
+                    var t = s.ToLowerInvariant();
+                    return t is "true" or "false" or "1" or "0" or "y" or "n";
+                }
+
+                static bool TarihMi(string s)
+                {
+                    return DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) && d.TimeOfDay == TimeSpan.Zero;
+                }
+
+                static bool TarihSaatMi(string s)
+                {
+                    return DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out _);
+                }
+            }
         }
 
         private sealed class ElemanBaglami

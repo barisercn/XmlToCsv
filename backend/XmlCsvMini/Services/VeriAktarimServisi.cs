@@ -5,7 +5,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -48,14 +47,14 @@ namespace XmlCsvMini.Services
             await using var conn = new NpgsqlConnection(_connStr);
             await conn.OpenAsync(ct);
 
-            // 👉 Hedef şemayı yoksa oluştur (idempotent)
-            await EnsureSchemaAsync(conn, _schema, ct);
+            // 👉 Hedef şemayı yoksa oluştur (idempotent) - veya sıfırla
+            await ResetSchemaAsync(conn, _schema, ct);
 
             using var arsiv = ZipFile.OpenRead(zipYolu);
 
             // 👉 ZIP içindeki tüm .csv dosyalarını al
             var csvEntries = arsiv.Entries
-                .Where(e => e.FullName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                .Where(e => !string.IsNullOrEmpty(e.FullName) && e.FullName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (csvEntries.Count == 0)
@@ -64,6 +63,41 @@ namespace XmlCsvMini.Services
                 return sonuc;
             }
 
+            // ============================================================
+            // 1. ADIM: Header Haritasını ve Tablo Listesini Hazırla
+            // ============================================================
+
+            // Tüm tablo adları (Listeleme vs. için kenarda dursun)
+            var tumTabloAdlari = csvEntries
+                .Select(e => Path.GetFileNameWithoutExtension(e.FullName))
+                .ToList();
+
+            // 👉 YENİ: Her tablo için header'ları (kolon adlarını) toplayalım
+            // Bu harita, dinamik filtreleme mantığı için kullanılacak.
+            var headerHaritasi = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in csvEntries)
+            {
+                var rawTableName = Path.GetFileNameWithoutExtension(entry.FullName);
+
+                using var srHeader = new StreamReader(
+                    entry.Open(),
+                    Encoding.UTF8,
+                    detectEncodingFromByteOrderMarks: true,
+                    leaveOpen: false);
+
+                var headerLine = await srHeader.ReadLineAsync();
+                if (string.IsNullOrEmpty(headerLine))
+                    continue;
+
+                // Mevcut SplitCsvLine fonksiyonunu kullanıyoruz
+                var csvCols = SplitCsvLine(headerLine).ToArray();
+                headerHaritasi[rawTableName] = csvCols;
+            }
+
+            // ============================================================
+            // 2. ADIM: Dosyaları İşle
+            // ============================================================
             foreach (var entry in csvEntries)
             {
                 ct.ThrowIfCancellationRequested();
@@ -71,6 +105,16 @@ namespace XmlCsvMini.Services
                 // 👉 Dosya adı -> tablo adı (temizlenir: TR karakterler/boşluk -> güvenli identifier)
                 var rawTable = Path.GetFileNameWithoutExtension(entry.FullName);
                 var table = SanitizeIdentifier(rawTable);
+
+                // ============================================================
+                // FİLTRE: Gereksiz tabloları (alan kırıklarını) atla
+                // ============================================================
+                // 👉 Artık tumTabloAdlari yerine headerHaritasi kullanıyoruz (Dinamik Mantık)
+                if (TabloDbIcinGereksiz(rawTable, headerHaritasi))
+                {
+                    _log.LogInformation("Tablo atlanıyor (dinamik alan kırığı): {schema}.{table}", _schema, table);
+                    continue; // Döngü başa döner, bu dosya işlenmez
+                }
 
                 _log.LogInformation("İşleniyor (direct): {schema}.{table}", _schema, table);
 
@@ -195,6 +239,17 @@ namespace XmlCsvMini.Services
         {
             // 👉 Şema yoksa oluştur
             await using var cmd = new NpgsqlCommand($"CREATE SCHEMA IF NOT EXISTS {QuoteIdent(schema)};", conn);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        private static async Task ResetSchemaAsync(NpgsqlConnection conn, string schema, CancellationToken ct)
+        {
+            // Şemayı komple silip tekrar oluşturur.
+            var sql = $@"
+DROP SCHEMA IF EXISTS {QuoteIdent(schema)} CASCADE;
+CREATE SCHEMA {QuoteIdent(schema)};";
+
+            await using var cmd = new NpgsqlCommand(sql, conn);
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
@@ -444,8 +499,141 @@ CREATE TABLE {QuoteIdent(schema)}.{QuoteIdent(table)}
             return s;
         }
 
-
-
         private static string QuoteIdent(string ident) => $"\"{ident}\""; // 👉 Postgres identifier'ı güvenli tırnakla
+
+        // ============================================================
+        // 3. ADIM: DİNAMİK TABLO FİLTRELEME MANTIĞI (YENİ HELPER)
+        // ============================================================
+        /// <summary>
+        /// Bir CSV tablosunun veritabanında ayrı bir tablo olarak tutulmasının gereksiz
+        /// olup olmadığını dinamik olarak yorumlar.
+        ///
+        /// Mantık:
+        ///   - Örn: person_accounts_account_transactions_transaction_amount
+        ///   - Base tablo: person_accounts_account_transactions_transaction
+        ///   - Eğer:
+        ///       * base tablo gerçekten varsa,
+        ///       * base tabloda "amount" isminde bir kolon varsa,
+        ///       * küçük tablonun kolonları da "fk + generic sutun/value/code" gibiyse
+        ///     → Bu tabloyu "aynı alanın kırığı" sayıp DB'de oluşturmaya gerek yok.
+        /// </summary>
+        private static bool TabloDbIcinGereksiz(
+            string? rawTableName,
+            IReadOnlyDictionary<string, string[]> headerHaritasi)
+        {
+            if (string.IsNullOrWhiteSpace(rawTableName))
+                return false;
+
+            var lower = rawTableName.ToLowerInvariant();
+
+            // İsim parçalarına ayır
+            var parts = lower.Split('_', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+                return false;
+
+            // Base tablo adı: sondan 1 segment eksik
+            var baseName = string.Join('_', parts[..^1]);
+            var alanAdi = parts[^1]; // son segment: amount, date, description, vs.
+
+            // Base tablo gerçekten var mı?
+            if (!headerHaritasi.TryGetValue(baseName, out var baseHeader))
+                return false;
+
+            // Küçük tablonun header'ı var mı?
+            if (!headerHaritasi.TryGetValue(rawTableName, out var childHeader))
+                return false;
+
+            // Base tablo kolon adları
+            var baseCols = new HashSet<string>(
+                baseHeader
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Select(c => c.Trim().ToLowerInvariant())
+            );
+
+            // Base tabloda bu isimde kolon yoksa → ilişki zayıf, riske girmeyelim
+            if (!baseCols.Contains(alanAdi))
+                return false;
+
+            // Küçük tablonun kolonları
+            var childCols = childHeader
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c.Trim().ToLowerInvariant())
+                .ToArray();
+
+            // Çok kolon varsa bu muhtemelen gerçek bir entity'dir, atlamayalım
+            if (childCols.Length > 3)
+                return false;
+
+            // FK / id dışındaki anlamlı kolonlara bakalım
+            var degerKolonlari = childCols
+                .Where(c =>
+                    c != "id" &&
+                    !c.EndsWith("_fk") &&
+                    c != "personlist_person_fk" &&
+                    c != "sutun" &&
+                    c != "value" &&
+                    c != "code")
+                .ToArray();
+
+            // Eğer anlamlı ekstra kolon yoksa → bu tablo base tablodaki alanAdi'nın
+            // gereksiz kırığıdır, DB'de tabloya dönüştürmeye gerek yok.
+            if (degerKolonlari.Length == 0)
+                return true;
+
+            return false;
+        }
+
+        // ============================================================
+        // YARDIMCI: OLUŞAN TABLOLARI LİSTELEME
+        // ============================================================
+        public async Task OlusanTablolariTerminaleYazdirAsync()
+        {
+            try
+            {
+                await using var conn = new NpgsqlConnection(_connStr);
+                await conn.OpenAsync();
+
+                // Sadece bizim şemamıza (_schema) ait tabloları isim sırasına göre çek
+                var sql = @"
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = @schema 
+                    ORDER BY table_name;";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("schema", _schema);
+
+                using var reader = await cmd.ExecuteReaderAsync();
+
+                Console.WriteLine();
+                Console.WriteLine($"╔════════════════════════════════════════════════════╗");
+                Console.WriteLine($"║   VERİTABANINDAKİ MEVCUT TABLOLAR ({_schema})   ║");
+                Console.WriteLine($"╚════════════════════════════════════════════════════╝");
+
+                int sayac = 0;
+                while (await reader.ReadAsync())
+                {
+                    sayac++;
+                    var tabloAdi = reader.GetString(0);
+                    // Terminalde şık görünmesi için:
+                    Console.WriteLine($"  {sayac,3}. {tabloAdi}");
+                }
+
+                if (sayac == 0)
+                {
+                    Console.WriteLine("  -> Hiç tablo bulunamadı.");
+                }
+
+                Console.WriteLine("------------------------------------------------------");
+                Console.WriteLine($"  TOPLAM: {sayac} adet tablo mevcut.");
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Tablo listesi alınırken hata: {ex.Message}");
+                Console.ResetColor();
+            }
+        }
     }
 }

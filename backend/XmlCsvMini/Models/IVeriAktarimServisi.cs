@@ -7,6 +7,7 @@ namespace XmlCsvMini.Models
     public interface IVeriAktarimServisi
     {
         Task<VeriAktarimSonucu> ZiptenVeritabaninaAktarAsync(string zipYolu, CancellationToken ct = default);
+        Task OlusanTablolariTerminaleYazdirAsync();
     }
 
     public sealed class VeriAktarimSonucu

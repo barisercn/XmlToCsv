@@ -39,7 +39,7 @@ export async function uploadFileFetch({ file, endpoint = "/api/upload", fields =
     return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-export function validateFile(file, { maxSizeMB = 512, accept = [".xml", ".csv"] } = {}) {
+export function validateFile(file, { maxSizeMB, accept = [".xml", ".csv"] } = {}) {
     const maxBytes = maxSizeMB * 1024 * 1024;
     if (file.size > maxBytes) return { ok: false, reason: `Dosya çok büyük (${humanSize(file.size)}).Limit: ${maxSizeMB} MB` };
     if (accept && accept.length > 0) {

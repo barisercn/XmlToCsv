@@ -49,6 +49,9 @@ namespace XmlCsvMini.Controllers
                 // Asıl işi yapan servisi çağır
                 var sonuc = await _veriAktarimServisi.ZiptenVeritabaninaAktarAsync(zipYolu);
 
+                // 👉 Yeni fonksiyonu burada, doğru değişken adıyla çağırıyoruz:
+                await _veriAktarimServisi.OlusanTablolariTerminaleYazdirAsync();
+
                 _gunluk.LogInformation($"{istek.DosyaAdi} veritabanına başarıyla aktarıldı.");
                 return Ok(new { message = $"Veri aktarımı tamamlandı. {sonuc.AktarilanTabloSayisi} tablo, {sonuc.ToplamSatirSayisi} satır işlendi." });
             }

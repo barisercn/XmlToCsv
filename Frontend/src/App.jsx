@@ -11,7 +11,7 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={<FileUpload maxSizeMB={2048} accept={['.xml']} />}
+          element={<FileUpload maxSizeMB={10240} accept={['.xml']} />}
         />
       </Routes>
     </BrowserRouter>

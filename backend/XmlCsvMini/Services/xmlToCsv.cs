@@ -52,7 +52,10 @@ namespace XmlCsvMini.Services
                 foreach (var hiyerarsi in hiyerarsiListesi)
                 {
                     var anaAday = hiyerarsi.AnaTablo;
-                    string anaTabloDosyaAdi = XmlToCsvExporter.YoldanDosyaAdiUret(anaAday.KayitYolu);
+                    string anaTabloDosyaAdi = TableNameBuilder.BuildTableName(
+     anaAday.KayitYolu,   // rootPath
+     anaAday.KayitYolu    // recordPath (root ile aynı)
+ );
                     var anaEsleme = EslemeBaslatici.DuzEslemeOlustur(rapor, rapor.AdayKayitlar.IndexOf(anaAday));
                     eslemeSozlugu[anaAday.KayitYolu] = anaEsleme;
 
@@ -104,7 +107,10 @@ namespace XmlCsvMini.Services
                     // ---- ALT TABLOLAR ----
                     foreach (var altAday in hiyerarsi.AltTablolar)
                     {
-                        string altTabloDosyaAdi = XmlToCsvExporter.YoldanDosyaAdiUret(altAday.KayitYolu);
+                        string altTabloDosyaAdi = TableNameBuilder.BuildTableName(
+      anaAday.KayitYolu,     // rootPath: Person / Company / Event
+      altAday.KayitYolu      // recordPath: Addresses/Address, Geo/Lat, Employees/EmployeeRef, ...
+  );
                         var altEsleme = EslemeBaslatici.DuzEslemeOlustur(rapor, rapor.AdayKayitlar.IndexOf(altAday));
                         eslemeSozlugu[altAday.KayitYolu] = altEsleme;
 
@@ -285,15 +291,30 @@ namespace XmlCsvMini.Services
         }
         public static string YoldanDosyaAdiUret(string yol)
         {
-            if (string.IsNullOrEmpty(yol)) return "bilinmeyen_kayit";
+            if (string.IsNullOrEmpty(yol))
+                return "bilinmeyen_kayit";
 
             var parcalar = yol.Split('/', StringSplitOptions.RemoveEmptyEntries);
 
-            // Genellikle sondan 1 veya 2 parça en anlamlı olanlardır
+            if (parcalar.Length == 0)
+                return "bilinmeyen_kayit";
 
-            var anlamliParcalar = parcalar.Skip(Math.Max(0, parcalar.Length - 2)).Take(2);
+            // Amaç:
+            // /Root/PersonList/Person/Addresses/Address/City
+            //          ↓      ↓       ↓        ↓        ↓
+            // parcalar: [Root, PersonList, Person, Addresses, Address, City]
+            // son 4:    [Person, Addresses, Address, City]
+            // -> person_addresses_address_city
 
-            return string.Join('_', anlamliParcalar).Replace(":", "_").ToLowerInvariant();
+            int take = parcalar.Length >= 4 ? 4 : parcalar.Length;
+
+            var anlamliParcalar = parcalar
+                .Skip(parcalar.Length - take)
+                .Take(take);
+
+            return string.Join('_', anlamliParcalar)
+                .Replace(":", "_")
+                .ToLowerInvariant();
         }
 
         /// <summary>

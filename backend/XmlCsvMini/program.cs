@@ -1,24 +1,29 @@
+using Microsoft.AspNetCore.Http.Features;   // FormOptions için
 using XmlCsvMini.Services;
 using XmlCsvMini.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Frontend'den (React uygulamasından) gelen isteklere izin vermek için CORS politikası ekliyoruz.
-// React/Vite'in varsayılan geliştirme adresi "http://localhost:5173"tür.
-// Eğer frontend'iniz farklı bir adreste çalışıyorsa, bu adresi güncellemeniz gerekir.
-// Sunucunun kabul edeceği maksimum istek boyutunu 2 GB olarak ayarlıyoruz.
-// Varsayılan limit (yaklaşık 30 MB) büyük dosyalar için yetersizdir.
+// 💡 Kestrel web sunucusunun kabul edeceği maksimum istek gövdesi (body) boyutu.
+// Varsayılan limit (~30 MB) büyük dosyalar için yetersiz.
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    // 2 GB = 2 * 1024 * 1024 * 1024 = 2,147,483,648 bayt.
-    serverOptions.Limits.MaxRequestBodySize = 2147483648;
+    // 10 GB = 10 * 1024 * 1024 * 1024 bayt.
+    serverOptions.Limits.MaxRequestBodySize = 10L * 1024 * 1024 * 1024;
 });
 
-// Form gönderimleri için de limiti artırıyoruz.
-builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+// 💡 ASP.NET Core'un form/multipart parse ederken kullandığı limitler.
+builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 2147483648;
+    // Multipart (dosya upload) için 10 GB limit
+    options.MultipartBodyLengthLimit = 10L * 1024 * 1024 * 1024;
+
+    // Form alanları (text vs.) için uzunluk limitleri
     options.ValueLengthLimit = int.MaxValue;
+    options.MultipartHeadersLengthLimit = int.MaxValue;
 });
+
+// Frontend'den gelen isteklere izin vermek için CORS
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(
@@ -30,23 +35,17 @@ builder.Services.AddCors(options =>
         });
 });
 
-// Controller'ları (yani UploadController'ımızı) servis olarak ekliyoruz.
+// Controller'ları (UploadController vs.) ekliyoruz.
 builder.Services.AddControllers();
 builder.Services.AddScoped<IVeriAktarimServisi, VeriAktarimServisi>();
 
 var app = builder.Build();
 
-// Geliştirme ortamında daha detaylı hata sayfaları göster.
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
 
-// Eklediğimiz CORS politikasını uygulamaya koyuyoruz.
 app.UseCors();
-
-// "/api/upload" gibi controller rotalarını aktif hale getiriyoruz.
 app.MapControllers();
-
-// Web sunucusunu çalıştır!
 app.Run();
