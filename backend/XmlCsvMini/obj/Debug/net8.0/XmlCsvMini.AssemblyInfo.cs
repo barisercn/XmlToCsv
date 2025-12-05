@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("XmlCsvMini")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f4dfb5081a4f5e1d4349f7e69c1cf3ca2e1dd8c7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3c9b79b92cad3e4d78734fbded219baaa0aa0c5c")]
 [assembly: System.Reflection.AssemblyProductAttribute("XmlCsvMini")]
 [assembly: System.Reflection.AssemblyTitleAttribute("XmlCsvMini")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
