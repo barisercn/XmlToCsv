@@ -1,0 +1,370 @@
+/* FileUpload.css */
+
+/* Genel Konteyner */
+.upload-wrap {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 30px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #333;
+}
+
+h2,
+h3,
+h4 {
+    color: #007bff;
+    /* Mavi tonu */
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 10px;
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+/* Butonlar */
+.button-row,
+.download-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.3s, opacity 0.3s;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #c82333;
+}
+
+.btn-ghost {
+    background-color: transparent;
+    color: #6c757d;
+    border: 1px solid #ced4da;
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: #5a6268;
+}
+
+.btn-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+    background-color: #117a8b;
+}
+
+.btn-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+    background-color: #1e7e34;
+}
+
+.btn-warning {
+    background-color: #ffc107;
+    color: #333;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background-color: #e0a800;
+}
+
+/* Dosya Seçimi Alanı */
+.file-select-box {
+    border: 2px dashed #ced4da;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: border-color 0.3s, background-color 0.3s;
+}
+
+.file-select-box:hover {
+    border-color: #007bff;
+    background-color: #f0f8ff;
+}
+
+.file-select-box .file-input {
+    /* Dosya girişini gizle ve label ile stil ver */
+    width: 0.1px;
+    height: 0.1px;
+    opacity: 0;
+    overflow: hidden;
+    position: absolute;
+    z-index: -1;
+}
+
+.file-select-box label {
+    display: block;
+    padding: 10px 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #007bff;
+    cursor: pointer;
+}
+
+.helper-text {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+/* Seçilen Dosyalar Listesi */
+.file-list {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+}
+
+.file-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.file-list li {
+    padding: 8px 0;
+    border-bottom: 1px dotted #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.file-list li:last-child {
+    border-bottom: none;
+}
+
+.file-list li.busy {
+    font-weight: bold;
+    color: #007bff;
+}
+
+/* Job Durumu Sorgulama */
+.job-status-box {
+    margin-top: 30px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+}
+
+.job-status-form {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.jobid-input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1em;
+}
+
+.job-status-result {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #e9ecef;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.job-status-result pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 0.9em;
+    color: #333;
+}
+
+/* Job Bilgisi */
+.job-info-box {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #28a745;
+    /* Yeşil sınır */
+    border-radius: 8px;
+    background-color: #d4edda;
+    /* Açık yeşil arka plan */
+    color: #155724;
+    /* Koyu yeşil metin */
+}
+
+.job-info-box h4 {
+    color: #155724;
+    border-bottom: 1px solid #c3e6cb;
+}
+
+.job-info-box code {
+    background-color: #c3e6cb;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+/* Mesajlar / Log */
+.log-box {
+    margin-top: 30px;
+    padding: 15px;
+    border: 1px solid #ffc107;
+    /* Sarı sınır */
+    border-radius: 8px;
+    background-color: #fff3cd;
+    /* Açık sarı arka plan */
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.log-box h4 {
+    color: #856404;
+    border-bottom: 1px solid #ffeeba;
+}
+
+.log-box ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.9em;
+}
+
+.log-box li {
+    padding: 5px 0;
+    border-bottom: 1px dotted #ffeeba;
+}
+
+.log-box li:last-child {
+    border-bottom: none;
+}
+
+/* Mesaj ikonları için renkler */
+.log-box li:has(> span:contains("✅")) {
+    color: #28a745;
+    /* Başarılı */
+}
+
+.log-box li:has(> span:contains("❌")) {
+    color: #dc3545;
+    /* Hata */
+}
+
+.log-box li:has(> span:contains("⚠️")) {
+    color: #ffc107;
+    /* Uyarı */
+}
+
+.log-box li:has(> span:contains("⬆️")) {
+    color: #007bff;
+    /* Yükleme */
+}
+
+.log-box li:has(> span:contains("⏹")) {
+    color: #6c757d;
+    /* İptal */
+}
+
+.log-box li:has(> span:contains("📋")) {
+    color: #17a2b8;
+    /* Kopyalama */
+}
+
+.log-box li:has(> span:contains("🔎")) {
+    color: #17a2b8;
+    /* Sorgulama */
+}
+
+.log-box li:has(> span:contains("📊")) {
+    color: #17a2b8;
+    /* Durum */
+}
+
+.log-box li:has(> span:contains("⬇️")) {
+    color: #28a745;
+    /* İndirme */
+}
+
+.log-box li:has(> span:contains("💾")) {
+    color: #6c757d;
+    /* Kaydetme */
+}
+
+/* Dosya girişini gizlediğimiz için, label'ı input'un yerine kullanacağız.
+   Ancak mevcut JSX'te label yerine input var.
+   Input'u gizleyip, üzerine bir label ekleyerek stil verebiliriz.
+   Mevcut JSX'i değiştirmemek için, input'u gizleyip, file-select-box'un
+   kendisine tıklanabilir özellik vereceğiz. */
+
+.file-select-box .file-input {
+    /* input'u görünmez yap ama tıklanabilirliğini koru */
+    opacity: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.file-select-box {
+    position: relative;
+    overflow: hidden;
+}
+
+.file-select-box::before {
+    content: "Dosya Seçmek İçin Tıklayın veya Dosyayı Buraya Sürükleyin";
+    display: block;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #007bff;
+    padding: 10px 0;
+    pointer-events: none;
+    /* Tıklamayı alttaki input'a geçir */
+}

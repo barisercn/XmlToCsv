@@ -7,8 +7,7 @@ import {
     humanSize,
     fetchJobStatus,
 } from "../services/uploadClient";
-import "../styles/buttons.css";
-import "../styles/file-upload-modern.css";
+import "../styles/modern-upload.css";
 
 export default function FileUpload({
     endpoint = "/api/upload",
