@@ -1,136 +1,248 @@
-import { uploadFileFetch, validateFile, humanSize } from "../services/uploadClient";
+// src/components/FileUpload.jsx
+
 import React, { useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import '../styles/buttons.css';
-import '../styles/file-upload-modern.css';
+import {
+    uploadFileFetch,
+    validateFile,
+    humanSize,
+    fetchJobStatus,
+} from "../services/uploadClient";
+import "../styles/buttons.css";
+import "../styles/file-upload-modern.css";
+
 export default function FileUpload({
     endpoint = "/api/upload",
-    multiple = true,
+    multiple = false,
     accept = [".xml"],
     maxSizeMB = 512,
 }) {
     const [files, setFiles] = useState([]);
     const [messages, setMessages] = useState([]);
-    const [status, setStatus] = useState("idle"); // idle | uploading | done | error | cancelled
+    const [status, setStatus] = useState("idle"); // idle | uploading | done | error | saving_db
     const [busyIndex, setBusyIndex] = useState(-1);
+
+    const [lastJobId, setLastJobId] = useState("");
+    const [jobIdInput, setJobIdInput] = useState("");
+    const [jobStatusResult, setJobStatusResult] = useState(null);
+
     const inputRef = useRef(null);
     const abortRef = useRef(null);
-    const [downloadableFile, setDownloadableFile] = useState(null);
-    const handleDownloadClick = () => {
-        if (!downloadableFile) return;
-        // API adresini VITE_API_BASE_URL'den alıyoruz (uploadClient.jsx'teki gibi)
-        const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
-        const downloadUrl = `${BASE_URL}/api/download/${downloadableFile}`;
 
-        // Dosyayı indirmek için görünmez bir link oluşturup tıklıyoruz
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = downloadableFile; // Tarayıcıya indirme adını belirtir
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+    const addMessage = useCallback((msg) => {
+        setMessages((prev) => [...prev, msg]);
+    }, []);
 
-        setMessages((m) => [...m, `⬇️${downloadableFile} indiriliyor...`]);
-    };
+    // Dosya seçimi
+    const onFileChange = (e) => {
+        const selected = Array.from(e.target.files || []);
+        if (!selected.length) return;
 
-    const onPick = (picked) => {
-        const list = Array.from(picked || []);
-        const valids = [];
-        // Değişiklik burada: 'accept' prop'u dizi değilse diziye çevir
-        const acceptArray = Array.isArray(accept) ? accept : accept.split(',');
-        list.forEach((f) => {
-            const ok = validateFile(f, { maxSizeMB, accept: acceptArray });
-            if (!ok.ok) {
-                setMessages((m) => [...m, `⚠️${f.name}: ${ok.reason}`]);
+        const valid = [];
+        const newMessages = [];
+
+        selected.forEach((file) => {
+            const v = validateFile(file, { maxSizeMB, accept });
+            if (!v.ok) {
+                newMessages.push(`❌ ${file.name}: ${v.reason}`);
             } else {
-                valids.push(f);
+                valid.push(file);
+                newMessages.push(`✅ ${file.name} eklendi (${humanSize(file.size)})`);
             }
         });
-        setFiles(valids);
-        setDownloadableFile(null);
-    };
-    const onInputChange = (e) => onPick(e.target.files);
 
-    const onDrop = (e) => {
-        e.preventDefault();
-        onPick(e.dataTransfer?.files);
+        setFiles(valid);
+        setMessages((prev) => [...prev, ...newMessages]);
     };
 
-
-    const onDragOver = (e) => e.preventDefault();
-
-    const startUpload = useCallback(async () => {
-        if (!files.length) {
-            setMessages((m) => [...m, "Lütfen dosya seçin."]);
-            return;
-        }
-        // Önceki mesajları ve indirme linkini temizle
-        setStatus("uploading");
-        setMessages([]);
-        setDownloadableFile(null);
-        abortRef.current = new AbortController();
-        let lastResult = null;
-
-        try {
-            for (let i = 0; i < files.length; i++) {
-                setBusyIndex(i);
-                const f = files[i];
-                // uploadClient'tan dönen sonucu yakala
-                lastResult = await uploadFileFetch({
-                    file: f,
-                    endpoint,
-                    signal: abortRef.current.signal,
-                });
-                setMessages((m) => [...m, `✅ ${f.name} işlenmek üzere sunucuya gönderildi.`]);
-            }
-            setStatus("done");
-            setBusyIndex(-1);
-
-            // Sonuç bir JSON ve içinde fileName varsa state'i güncelle
-            if (lastResult && !lastResult.isFile && lastResult.data && lastResult.data.fileName) {
-                setDownloadableFile(lastResult.data.fileName);
-                setMessages((m) => [...m, `🎉 Dönüştürme tamamlandı. Dosyanız indirilmeye hazır!`]);
-            } else {
-                throw new Error("Sunucudan beklenen dosya adı alınamadı.");
-            }
-
-        } catch (err) {
-            setStatus("error");
-            setMessages((m) => [...m, `❌ Hata: ${err.message}`]);
-            setBusyIndex(-1);
-        } finally {
-            abortRef.current = null;
-        }
-    }, [files, endpoint]);
-
-    const cancelUpload = () => {
-        abortRef.current?.abort();
-        setStatus("cancelled");
-        setBusyIndex(-1);
-        setMessages((m) => [...m, "⏹️ Yükleme iptal edildi."]);
-    };
-
+    // Her şeyi sıfırla
     const clearAll = () => {
         setFiles([]);
         setMessages([]);
         setStatus("idle");
-        setDownloadableFile(null);
         setBusyIndex(-1);
-        if (inputRef.current) inputRef.current.value = null;
-    };// FileUpload.jsx içine eklenecek
+        setLastJobId("");
+        setJobIdInput("");
+        setJobStatusResult(null);
+        if (inputRef.current) {
+            inputRef.current.value = "";
+        }
+    };
 
-    const handleSaveToDb = async () => {
-        if (!downloadableFile) return;
+    // Yüklemeyi iptal et
+    const cancelUpload = () => {
+        if (abortRef.current) {
+            abortRef.current.abort();
+            abortRef.current = null;
+            setStatus("idle");
+            setBusyIndex(-1);
+            addMessage("⏹ Yükleme iptal edildi.");
+        }
+    };
 
-        setStatus("saving_db"); // Yeni durum
-        setMessages((m) => [...m, `Veritabanına kaydediliyor... Lütfen bekleyin.`]);
+    // Yüklemeyi başlat (jobId alma)
+    const startUpload = useCallback(
+        async () => {
+            if (!files.length) {
+                addMessage("Lütfen önce bir dosya seçin.");
+                return;
+            }
+
+            const file = files[0]; // Şimdilik tek dosya ile çalışıyoruz
+            setStatus("uploading");
+            setMessages([]);
+            setBusyIndex(0);
+            setJobStatusResult(null);
+
+            const controller = new AbortController();
+            abortRef.current = controller;
+
+            try {
+                addMessage(
+                    `⬆️ Yükleniyor: ${file.name} (${humanSize(file.size)})...`
+                );
+
+                const result = await uploadFileFetch({
+                    file,
+                    endpoint,
+                    signal: controller.signal,
+                });
+
+                // Beklenen format: { jobId: "..." }
+                if (result && result.jobId) {
+                    setLastJobId(result.jobId);
+                    setJobIdInput(result.jobId);
+
+                    setStatus("done");
+                    setBusyIndex(-1);
+
+                    addMessage(
+                        `✅ İş başarıyla oluşturuldu. JobId: ${result.jobId}`
+                    );
+                    addMessage(
+                        "Bu JobId'yi kaydedebilir veya aşağıdaki alandan durumunu sorgulayabilirsiniz."
+                    );
+                } else {
+                    setStatus("error");
+                    setBusyIndex(-1);
+                    addMessage("❌ Sunucudan beklenen jobId bilgisi alınamadı.");
+                }
+            } catch (err) {
+                if (controller.signal.aborted) {
+                    addMessage("⚠️ Yükleme client tarafından iptal edildi.");
+                    setStatus("idle");
+                } else {
+                    console.error(err);
+                    setStatus("error");
+                    setBusyIndex(-1);
+                    addMessage(`❌ Hata: ${err.message}`);
+                }
+            } finally {
+                abortRef.current = null;
+            }
+        },
+        [files, endpoint, addMessage]
+    );
+
+    // JobId'yi panoya kopyala
+    const handleCopyJobId = async () => {
+        if (!lastJobId) return;
+        try {
+            await navigator.clipboard.writeText(lastJobId);
+            addMessage("📋 JobId panoya kopyalandı.");
+        } catch {
+            addMessage(
+                "⚠️ JobId'yi kopyalarken bir sorun oluştu, elle seçip kopyalayabilirsiniz."
+            );
+        }
+    };
+
+    // Job durumunu sorgula
+    const handleCheckJobStatus = async () => {
+        if (!jobIdInput) {
+            addMessage(
+                "Lütfen durumunu sorgulamak için bir JobId girin."
+            );
+            return;
+        }
 
         try {
-            const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+            addMessage(`🔎 Durum sorgulanıyor: ${jobIdInput} ...`);
+            const result = await fetchJobStatus(jobIdInput);
+            setJobStatusResult(result);
+
+            addMessage(
+                `📊 Durum: ${result.status} | Mesaj: ${result.message ?? "-"
+                }`
+            );
+
+            if (result.downloadFileName && result.status === "Completed") {
+                addMessage(
+                    `✅ ZIP hazır: ${result.downloadFileName} - İndirmek için aşağıdaki "ZIP'i İndir" butonunu kullanabilirsiniz.`
+                );
+            }
+        } catch (err) {
+            console.error(err);
+            addMessage(`❌ Durum sorgulama hatası: ${err.message}`);
+        }
+    };
+
+    // ZIP dosyasını indir
+    const handleDownloadZip = () => {
+        if (
+            !jobStatusResult ||
+            jobStatusResult.status !== "Completed" ||
+            !jobStatusResult.downloadFileName
+        ) {
+            addMessage(
+                "⚠️ İndirilebilir bir dosya bulunamadı. Job durumunu 'Completed' olacak şekilde yeniden kontrol edin."
+            );
+            return;
+        }
+
+        const fileName = jobStatusResult.downloadFileName;
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+        const url =
+            BASE_URL +
+            "/api/download/" +
+            encodeURIComponent(fileName);
+
+        // Doğrudan indir
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        addMessage(`⬇️ ${fileName} indiriliyor...`);
+    };
+
+    // ZIP'i PostgreSQL'e kaydet (DB import)
+    const handleSaveToDb = async () => {
+        if (
+            !jobStatusResult ||
+            jobStatusResult.status !== "Completed" ||
+            !jobStatusResult.downloadFileName
+        ) {
+            addMessage(
+                "⚠️ Veritabanına kaydetmek için hazır bir ZIP dosyası yok. Önce job durumunun 'Completed' olduğundan emin olun."
+            );
+            return;
+        }
+
+        const fileName = jobStatusResult.downloadFileName;
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+
+        setStatus("saving_db");
+        addMessage(
+            `💾 PostgreSQL'e kaydediliyor: ${fileName} ...`
+        );
+
+        try {
             const res = await fetch(`${BASE_URL}/api/dbyekaydet`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fileName: downloadableFile }) // Zip dosyasının adını gönder
+                body: JSON.stringify({ fileName }),
             });
 
             if (!res.ok) {
@@ -139,71 +251,71 @@ export default function FileUpload({
             }
 
             const result = await res.json();
-            setMessages((m) => [...m, `✅ ${result.message}`]);
+            addMessage(`✅ Veritabanı kaydı başarılı: ${result.message}`);
             setStatus("done");
-
         } catch (err) {
-            setMessages((m) => [...m, `❌ Veritabanı Kayıt Hatası: ${err.message}`]);
+            console.error(err);
+            addMessage(
+                `❌ Veritabanı Kayıt Hatası: ${err.message}`
+            );
             setStatus("error");
         }
     };
 
     return (
         <div className="upload-wrap">
-            <h2 className="upload-title">Dosya Yükleme</h2>
+            <h2>XML Yükleme ve İş Durumu Takip</h2>
 
-            <div
-                className={`dropzone ${status === "uploading" ? "is-uploading" : ""}`}
-                onDrop={onDrop}
-                onDragOver={onDragOver}
-            >
-                <p>Dosyaları buraya sürükleyip bırak veya</p>
-                <button
-                    type="button"
-                    className="btn"
-                    onClick={() => inputRef.current?.click()}
-                    disabled={status === "uploading"}
-                >
-                    Gözat
-                </button>
+            {/* Dosya Seçimi */}
+            <div className="file-select-box">
                 <input
                     ref={inputRef}
                     type="file"
+                    accept={
+                        Array.isArray(accept) ? accept.join(",") : accept
+                    }
                     multiple={multiple}
-                    accept={accept}
-                    onChange={onInputChange}
-                    style={{ display: "none" }}
+                    onChange={onFileChange}
                 />
-                <small className="hint">
-                    İzin verilen: <b>{accept}</b> • Boyut limiti: <b>{maxSizeMB} MB</b>
-                </small>
+                <p className="helper-text">
+                    İzin verilen uzantılar:{" "}
+                    {Array.isArray(accept)
+                        ? accept.join(", ")
+                        : accept}{" "}
+                    – Maksimum {maxSizeMB} MB
+                </p>
             </div>
 
+            {/* Seçilen Dosyalar */}
             {files.length > 0 && (
                 <div className="file-list">
-                    {files.map((f, i) => (
-                        <div key={i} className="file-item">
-                            <div className="file-meta">
-                                <div className="file-name">{f.name}</div>
-                                <div className="file-size">{humanSize(f.size)}</div>
-                            </div>
-                            {status === "uploading" && busyIndex === i ? (
-                                <span className="badge">Yükleniyor…</span>
-                            ) : null}
-                        </div>
-                    ))}
+                    <h4>Seçilen dosyalar</h4>
+                    <ul>
+                        {files.map((f, idx) => (
+                            <li
+                                key={idx}
+                                className={idx === busyIndex ? "busy" : ""}
+                            >
+                                {f.name} ({humanSize(f.size)})
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             )}
 
-            <div className="actions">
+            {/* Upload Butonları */}
+            <div className="button-row">
                 <button
                     type="button"
                     className="btn btn-primary"
                     onClick={startUpload}
                     disabled={status === "uploading" || files.length === 0}
                 >
-                    Yüklemeyi Başlat
+                    {status === "uploading"
+                        ? "Yükleniyor..."
+                        : "Yüklemeyi Başlat"}
                 </button>
+
                 <button
                     type="button"
                     className="btn btn-danger"
@@ -212,46 +324,122 @@ export default function FileUpload({
                 >
                     İptal
                 </button>
-                <button type="button" className="btn btn-ghost" onClick={clearAll}>
+
+                <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={clearAll}
+                    disabled={status === "uploading"}
+                >
                     Temizle
                 </button>
-
             </div>
 
-            {messages.length > 0 && (
-                <div className="messages">
-                    {messages.map((m, idx) => (
-                        <div key={idx} className="msg">{m}</div>
-                    ))}
+            {/* JobId Bilgisi */}
+            {lastJobId && (
+                <div className="job-info-box">
+                    <h4>Oluşturulan İş (Job)</h4>
+                    <p>
+                        JobId: <code>{lastJobId}</code>
+                    </p>
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={handleCopyJobId}
+                    >
+                        JobId'yi Kopyala
+                    </button>
                 </div>
             )}
 
-            {/* --- YENİ İNDİRME BÖLÜMÜNÜ BURAYA EKLEYİN --- */}
-            {downloadableFile && (
-                <div className="download-section" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px', textAlign: 'center' }}>
-                    <h4>İndirme</h4>
-                    <p>İşlenmiş dosyanız hazır:</p>
+            {/* Job Durumu Sorgulama */}
+            <div className="job-status-box">
+                <h3>İş Durumu Sorgula</h3>
+                <p>
+                    Herhangi bir zamanda job durumunu görmek için, JobId'yi
+                    girip sorgulayabilirsiniz.
+                </p>
+                <div className="job-status-form">
+                    <input
+                        type="text"
+                        value={jobIdInput}
+                        onChange={(e) =>
+                            setJobIdInput(e.target.value)
+                        }
+                        placeholder="JobId girin..."
+                        className="jobid-input"
+                    />
                     <button
                         type="button"
-                        className="btn btn-success"
-                        onClick={handleDownloadClick}
+                        className="btn btn-info"
+                        onClick={handleCheckJobStatus}
                     >
-                        {downloadableFile} İndir
-                    </button>
-                    {/* YENİ BUTON */}
-                    <button
-                        type="button"
-                        className="btn btn-info" // Veya farklı bir stil
-                        onClick={handleSaveToDb} // Yeni fonksiyon
-                        disabled={status === 'uploading' || status === 'saving_db'}
-                        style={{ marginLeft: '10px' }}
-                    >
-                        {status === 'saving_db' ? 'Kaydediliyor...' : 'PostgreSQL\'e Kaydet'}
+                        Durumu Getir
                     </button>
                 </div>
-            )
-            }
 
-        </div > // Burası upload-wrap'in kapanışı
+                {jobStatusResult && (
+                    <div className="job-status-result">
+                        <h4>Son Durum</h4>
+                        <pre>
+                            {JSON.stringify(
+                                jobStatusResult,
+                                null,
+                                2
+                            )}
+                        </pre>
+                    </div>
+                )}
+
+                {/* ZIP hazırsa İNDİR ve DB'ye KAYDET butonları */}
+                {jobStatusResult &&
+                    jobStatusResult.status === "Completed" &&
+                    jobStatusResult.downloadFileName && (
+                        <div
+                            className="download-actions"
+                            style={{
+                                marginTop: "16px",
+                                display: "flex",
+                                gap: "8px",
+                                flexWrap: "wrap",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                className="btn btn-success"
+                                onClick={handleDownloadZip}
+                            >
+                                ZIP&apos;i İndir (
+                                {jobStatusResult.downloadFileName})
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-warning"
+                                onClick={handleSaveToDb}
+                                disabled={
+                                    status === "saving_db" ||
+                                    status === "uploading"
+                                }
+                            >
+                                {status === "saving_db"
+                                    ? "PostgreSQL'e Kaydediliyor..."
+                                    : "PostgreSQL'e Kaydet"}
+                            </button>
+                        </div>
+                    )}
+            </div>
+
+            {/* Mesajlar / Log */}
+            {messages.length > 0 && (
+                <div className="log-box">
+                    <h4>İşlem Günlüğü</h4>
+                    <ul>
+                        {messages.map((m, i) => (
+                            <li key={i}>{m}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
     );
 }

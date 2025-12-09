@@ -38,6 +38,7 @@ builder.Services.AddCors(options =>
 // Controller'ları (UploadController vs.) ekliyoruz.
 builder.Services.AddControllers();
 builder.Services.AddScoped<IVeriAktarimServisi, VeriAktarimServisi>();
+builder.Services.AddSingleton<IIslemeGoreviYonetimi, InMemoryIslemeGoreviYonetimi>();
 
 var app = builder.Build();
 
