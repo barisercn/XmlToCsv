@@ -19,6 +19,8 @@ export default function FileUpload({
     const [messages, setMessages] = useState([]);
     const [status, setStatus] = useState("idle"); // idle | uploading | done | error | saving_db
     const [busyIndex, setBusyIndex] = useState(-1);
+    const [loadType, setLoadType] = useState("Full");   // Full / Daily
+    const [dataDate, setDataDate] = useState("");
 
     const [lastJobId, setLastJobId] = useState("");
     const [jobIdInput, setJobIdInput] = useState("");
@@ -241,7 +243,11 @@ export default function FileUpload({
             const res = await fetch(`${BASE_URL}/api/dbyekaydet`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fileName }),
+                body: JSON.stringify({
+                    fileName,
+                    loadType,   // "Full" veya "Daily"
+                    dataDate    // "2025-12-10" (veya boş ise backend bugün yapacak)
+                }),
             });
 
             if (!res.ok) {
@@ -389,6 +395,32 @@ export default function FileUpload({
                         </pre>
                     </div>
                 )}
+                {/* DB import ayarları */}
+                <div className="db-import-options" style={{ marginTop: "16px" }}>
+                    <h4>Veritabanı Yükleme Ayarları</h4>
+                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+                        <label>
+                            Yükleme Türü:&nbsp;
+                            <select
+                                value={loadType}
+                                onChange={(e) => setLoadType(e.target.value)}
+                            >
+                                <option value="Full">İlk Yük (Full)</option>
+                                <option value="Daily">Günlük / Artış (Daily)</option>
+                            </select>
+                        </label>
+
+                        <label>
+                            Veri Tarihi:&nbsp;
+                            <input
+                                type="date"
+                                value={dataDate}
+                                onChange={(e) => setDataDate(e.target.value)}
+                            />
+                        </label>
+                    </div>
+                </div>
+
 
                 {/* ZIP hazırsa İNDİR ve DB'ye KAYDET butonları */}
                 {jobStatusResult &&

@@ -37,7 +37,11 @@ namespace XmlCsvMini.Services
                 _schema = "deneme_schema"; // 👉 şema belirtilmemişse "import" kullan
         }
 
-        public async Task<VeriAktarimSonucu> ZiptenVeritabaninaAktarAsync(string zipYolu, CancellationToken ct = default)
+        public async Task<VeriAktarimSonucu> ZiptenVeritabaninaAktarAsync(
+    string zipYolu,
+    string? loadType = null,
+    DateTime? dataDate = null,
+    CancellationToken ct = default)
         {
             if (!File.Exists(zipYolu))
                 throw new FileNotFoundException("ZIP dosyası bulunamadı", zipYolu);
@@ -48,7 +52,28 @@ namespace XmlCsvMini.Services
             await conn.OpenAsync(ct);
 
             // 👉 Hedef şemayı yoksa oluştur (idempotent) - veya sıfırla
-            await ResetSchemaAsync(conn, _schema, ct);
+            // await ResetSchemaAsync(conn, _schema, ct);
+            // 1) Şemayı silmek yok, sadece varsa kullan; yoksa oluştur
+            await EnsureSchemaAsync(conn, _schema, ct);
+
+            // 2) Bu import için bir batchId ve dataDate üret
+            var batchId = Guid.NewGuid();
+
+            var effectiveLoadType = string.IsNullOrWhiteSpace(loadType)
+                ? "Direct"
+                : loadType;
+
+            var effectiveDataDate = (dataDate ?? DateTime.UtcNow).Date;
+
+            await EnsureImportBatchesTableAsync(conn, ct);
+            await KaydetImportBatchAsync(
+                conn,
+                batchId,
+                Path.GetFileName(zipYolu),
+                effectiveLoadType,   // ← Artık gerçekten Full/Daily/Direct ne geldiyse
+                effectiveDataDate,   // ← Her zaman non-null DateTime
+                ct);
+
 
             using var arsiv = ZipFile.OpenRead(zipYolu);
 
@@ -182,7 +207,13 @@ namespace XmlCsvMini.Services
                     await sr2.ReadLineAsync();
 
                     var kolonCount = sutunOzeti.Length;
-                    string kolonListSql = string.Join(", ", sutunOzeti.Select(s => QuoteIdent(s.Ad)));
+                    string kolonListSql = string.Join(", ",
+         sutunOzeti.Select(s => QuoteIdent(s.Ad))
+         .Concat(new[]
+         {
+            QuoteIdent("batch_id"),
+            QuoteIdent("data_date")
+         }));
 
                     await using var importer = await conn.BeginBinaryImportAsync(
                         $"COPY {QuoteIdent(_schema)}.{QuoteIdent(table)} ({kolonListSql}) FROM STDIN (FORMAT BINARY)", ct);
@@ -195,6 +226,8 @@ namespace XmlCsvMini.Services
                         var values = SplitCsvLine(line).ToArray();
 
                         await importer.StartRowAsync(ct);
+
+                        // 1) CSV'den gelen kolonlar
                         for (int i = 0; i < kolonCount; i++)
                         {
                             string? deger = i < values.Length ? values[i] : null;
@@ -202,19 +235,21 @@ namespace XmlCsvMini.Services
 
                             if (string.IsNullOrEmpty(deger))
                             {
-                                // 👉 Boş olanları NULL yaz
                                 importer.WriteNull();
                                 continue;
                             }
 
-                            // 👉 Metin değeri uygun .NET objesine + NpgsqlDbType'a çevrilir ve yazılır
                             var (obj, npgsqlType) = ConvertToPgValue(deger, tip);
                             importer.Write(obj, npgsqlType);
                         }
+
+                        // 2) Ek kolonlar: batch_id + data_date
+                        importer.Write(batchId, NpgsqlDbType.Uuid);
+                        importer.Write(effectiveDataDate, NpgsqlDbType.Date);
                     }
 
-                    // 👉 COPY finalize (commit edilir)
                     await importer.CompleteAsync(ct);
+
                 }
 
                 // 👉 Sonuç özetini doldur
@@ -259,15 +294,18 @@ CREATE SCHEMA {QuoteIdent(schema)};";
         {
             var colsSql = string.Join(", ",
                 sutunlar.Select(s => $"{QuoteIdent(s.Ad)} {PgTypeFor(s)}"));
+            var extraCols = @",
+    batch_id uuid,
+    data_date date";
 
             var sql = $@"
 CREATE SCHEMA IF NOT EXISTS {QuoteIdent(schema)};
 
-DROP TABLE IF EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)};
 
-CREATE TABLE {QuoteIdent(schema)}.{QuoteIdent(table)}
+
+CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
 (
-    {colsSql}
+    {colsSql}{extraCols}
 );";
 
             await using var cmd = new NpgsqlCommand(sql, conn);
@@ -635,5 +673,43 @@ CREATE TABLE {QuoteIdent(schema)}.{QuoteIdent(table)}
                 Console.ResetColor();
             }
         }
+        private static async Task EnsureImportBatchesTableAsync(
+    NpgsqlConnection conn,
+    CancellationToken ct)
+        {
+            var sql = @"
+CREATE TABLE IF NOT EXISTS import_batches (
+    id uuid PRIMARY KEY,
+    source_file_name text NOT NULL,
+    load_type text NOT NULL,
+    data_date date NOT NULL,
+    loaded_at timestamptz NOT NULL DEFAULT now(),
+    record_count int
+);";
+
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        private static async Task KaydetImportBatchAsync(
+            NpgsqlConnection conn,
+            Guid batchId,
+            string sourceFileName,
+            string loadType,
+            DateTime dataDate,
+            CancellationToken ct)
+        {
+            var sql = @"
+INSERT INTO import_batches (id, source_file_name, load_type, data_date)
+VALUES (@id, @src, @type, @date);";
+
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("id", batchId);
+            cmd.Parameters.AddWithValue("src", sourceFileName);
+            cmd.Parameters.AddWithValue("type", loadType);
+            cmd.Parameters.AddWithValue("date", dataDate);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
     }
 }

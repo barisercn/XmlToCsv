@@ -46,14 +46,31 @@ namespace XmlCsvMini.Controllers
 
             try
             {
-                // Asıl işi yapan servisi çağır
-                var sonuc = await _veriAktarimServisi.ZiptenVeritabaninaAktarAsync(zipYolu);
+                // Frontend'den gelenleri normalize et
+                var loadType = string.IsNullOrWhiteSpace(istek.YuklemeTuru)
+                    ? "Direct"               // varsayılan
+                    : istek.YuklemeTuru;
 
-                // 👉 Yeni fonksiyonu burada, doğru değişken adıyla çağırıyoruz:
+                var dataDate = (istek.VeriTarihi ?? DateTime.UtcNow).Date;
+
+                // Asıl işi yapan servisi çağır (artık batch bilgisiyle)
+                var sonuc = await _veriAktarimServisi.ZiptenVeritabaninaAktarAsync(
+                    zipYolu,
+                    loadType,
+                    dataDate,
+                    HttpContext.RequestAborted);
+
                 await _veriAktarimServisi.OlusanTablolariTerminaleYazdirAsync();
 
-                _gunluk.LogInformation($"{istek.DosyaAdi} veritabanına başarıyla aktarıldı.");
-                return Ok(new { message = $"Veri aktarımı tamamlandı. {sonuc.AktarilanTabloSayisi} tablo, {sonuc.ToplamSatirSayisi} satır işlendi." });
+                _gunluk.LogInformation(
+                    "{Dosya} veritabanına başarıyla aktarıldı. loadType={LoadType}, dataDate={DataDate}",
+                    istek.DosyaAdi, loadType, dataDate);
+                return Ok(new
+                {
+                    message = $"Veri aktarımı tamamlandı. {sonuc.AktarilanTabloSayisi} tablo, {sonuc.ToplamSatirSayisi} satır işlendi.",
+                    loadType,
+                    dataDate
+                });
             }
             catch (Exception hata)
             {

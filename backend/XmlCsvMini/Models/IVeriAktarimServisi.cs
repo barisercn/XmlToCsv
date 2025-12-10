@@ -6,7 +6,12 @@ namespace XmlCsvMini.Models
 {
     public interface IVeriAktarimServisi
     {
-        Task<VeriAktarimSonucu> ZiptenVeritabaninaAktarAsync(string zipYolu, CancellationToken ct = default);
+        Task<VeriAktarimSonucu> ZiptenVeritabaninaAktarAsync(
+         string zipYolu,
+         string? loadType = null,
+         DateTime? dataDate = null,
+         CancellationToken ct = default);
+
         Task OlusanTablolariTerminaleYazdirAsync();
     }
 
