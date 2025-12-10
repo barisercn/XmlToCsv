@@ -343,7 +343,7 @@ namespace XmlCsvMini.Services
 
             selectExpr = selectExpr.Trim();
 
-            // ./text(), text(), .
+            // 1) Sadece text seçimleri
             if (selectExpr == "./text()" || selectExpr == "text()" || selectExpr == ".")
             {
                 var v = (element.Value ?? "").Trim();
@@ -351,45 +351,76 @@ namespace XmlCsvMini.Services
                 return result;
             }
 
-            // ./@attr
-            if (selectExpr.StartsWith("./@"))
+            // 2) Sadece attribute seçimleri: ./@attr veya @attr
+            if (selectExpr.StartsWith("./@", StringComparison.Ordinal) ||
+                selectExpr.StartsWith("@", StringComparison.Ordinal))
             {
-                var attrName = selectExpr.Substring(3);
+                string attrName = selectExpr.StartsWith("./@")
+                    ? selectExpr.Substring(3)
+                    : selectExpr.Substring(1);
+
                 var attr = element.Attribute(attrName);
                 if (attr != null)
                 {
-                    var v = attr.Value?.Trim();
+                    var v = (attr.Value ?? "").Trim();
                     if (!string.IsNullOrEmpty(v)) result.Add(v);
                 }
                 return result;
             }
 
-            // @attr
-            if (selectExpr.StartsWith("@"))
+            // 3) Çocuk element altında attribute: ./Child/@attr vb.
+            if (selectExpr.Contains("/@"))
             {
-                var attrName = selectExpr.Substring(1);
-                var attr = element.Attribute(attrName);
-                if (attr != null)
+                // Örn: ./Child/@type  ->  Child, attr=type
+                var withoutDot = selectExpr.StartsWith("./")
+                    ? selectExpr.Substring(2)
+                    : selectExpr;
+
+                var parts = withoutDot.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                // Son parça @attr, ondan öncesi element path
+                var attrPart = parts[^1];
+                if (attrPart.StartsWith("@"))
                 {
-                    var v = attr.Value?.Trim();
-                    if (!string.IsNullOrEmpty(v)) result.Add(v);
+                    string attrName = attrPart.Substring(1);
+                    var elementPath = string.Join('/', parts[..^1]);
+
+                    // önce child elementleri bul
+                    IEnumerable<XElement> current = new[] { element };
+                    var elParts = elementPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var p in elParts)
+                    {
+                        current = current.SelectMany(x => x.Elements()
+                            .Where(e => e.Name.LocalName == p));
+                    }
+
+                    foreach (var el in current)
+                    {
+                        var attr = el.Attribute(attrName);
+                        if (attr != null)
+                        {
+                            var v = (attr.Value ?? "").Trim();
+                            if (!string.IsNullOrEmpty(v)) result.Add(v);
+                        }
+                    }
+
+                    return result;
                 }
-                return result;
             }
 
+            // 4) Kalan her şey: senin mevcut child-element text mantığın
             // ./Child/SubChild vb.
             string path = selectExpr.StartsWith("./") ? selectExpr.Substring(2) : selectExpr;
-            var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) return result;
+            var parts2 = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts2.Length == 0) return result;
 
-            IEnumerable<XElement> current = new[] { element };
-            foreach (var part in parts)
+            IEnumerable<XElement> current2 = new[] { element };
+            foreach (var part in parts2)
             {
-                current = current.SelectMany(x => x.Elements()
+                current2 = current2.SelectMany(x => x.Elements()
                     .Where(e => e.Name.LocalName == part));
             }
 
-            foreach (var el in current)
+            foreach (var el in current2)
             {
                 var v = el.Value?.Trim();
                 if (!string.IsNullOrEmpty(v)) result.Add(v);
@@ -397,5 +428,6 @@ namespace XmlCsvMini.Services
 
             return result;
         }
+
     }
 }

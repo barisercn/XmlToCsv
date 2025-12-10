@@ -34,7 +34,8 @@ namespace XmlCsvMini.Services
                 Diziler = new DiziStratejisi(),
                 Sutunlar = alanlar.Select(alan => new KolonEsleme
                 {
-                    Csv = MetniSnakeCaseYap(AnlamliSonParca(alan.Yol)),
+                    Csv = MetniSnakeCaseYap(AnlamliSonParca(alan.Yol, aday.KayitYolu)),
+
                     Kaynak = alan.Yol,
                     Birlestir = (alan.Kardinalite ?? "").Contains('N') ? " | " : null
                 }).ToList()
@@ -68,7 +69,8 @@ namespace XmlCsvMini.Services
                 Diziler = new DiziStratejisi { Birlestirici = secenek.Birlestirici },
                 Sutunlar = alanlar.Select(alan => new KolonEsleme
                 {
-                    Csv = MetniSnakeCaseYap(AnlamliSonParca(alan.Yol)),
+                    Csv = MetniSnakeCaseYap(AnlamliSonParca(alan.Yol, aday.KayitYolu)),
+
                     Kaynak = alan.Yol,
                     Zorunlu = false,
                     Birlestir = (alan.Kardinalite ?? "").Contains('N', StringComparison.OrdinalIgnoreCase) ? secenek.Birlestirici : null
@@ -103,7 +105,7 @@ namespace XmlCsvMini.Services
                 Diziler = new DiziStratejisi(),
                 Sutunlar = filtrelenmisAlanlar.Select(alan => new KolonEsleme
                 {
-                    Csv = MetniSnakeCaseYap(AnlamliSonParca(alan.Yol)),
+                    Csv = MetniSnakeCaseYap(AnlamliSonParca(alan.Yol, aday.KayitYolu)),
                     Kaynak = alan.Yol,
                     Zorunlu = false,
                     Birlestir = (alan.Kardinalite ?? "").Contains('N', StringComparison.OrdinalIgnoreCase) ? " | " : null
@@ -113,17 +115,32 @@ namespace XmlCsvMini.Services
         }
 
         // DÜZELTME: Bu metotlar 'public' yapıldı, böylece başka sınıflar da erişebilir.
-        public static string AnlamliSonParca(string yol)
+        public static string AnlamliSonParca(string alanYolu, string? kayitYolu)
         {
-            var parcalar = yol.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var parcalar = (alanYolu ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
             for (int i = parcalar.Length - 1; i >= 0; i--)
             {
                 var p = parcalar[i];
                 if (p is "." or "text()") continue;
                 return p.StartsWith("@", StringComparison.Ordinal) ? p.Substring(1) : p;
             }
+
+            // Buraya düşüyorsak: alan yolu sadece "./text()" vb.
+            // O zaman kayıt yolunun son parçasını kullan (OpenedDate, Tag, Note…)
+            if (!string.IsNullOrWhiteSpace(kayitYolu))
+            {
+                var kayitParts = kayitYolu.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                if (kayitParts.Length > 0)
+                {
+                    var last = kayitParts[^1];
+                    return last;
+                }
+            }
+
             return "sutun";
         }
+
+
 
         public static string MetniSnakeCaseYap(string girdi)
         {
