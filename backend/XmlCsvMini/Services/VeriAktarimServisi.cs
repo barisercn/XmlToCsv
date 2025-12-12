@@ -54,7 +54,7 @@ namespace XmlCsvMini.Services
             // 👉 Hedef şemayı yoksa oluştur (idempotent) - veya sıfırla
             // await ResetSchemaAsync(conn, _schema, ct);
             // 1) Şemayı silmek yok, sadece varsa kullan; yoksa oluştur
-            await EnsureSchemaAsync(conn, _schema, ct);
+            // await EnsureSchemaAsync(conn, _schema, ct);
 
             // 2) Bu import için bir batchId ve dataDate üret
             var batchId = Guid.NewGuid();
@@ -279,13 +279,9 @@ namespace XmlCsvMini.Services
 
         private static async Task ResetSchemaAsync(NpgsqlConnection conn, string schema, CancellationToken ct)
         {
-            // Şemayı komple silip tekrar oluşturur.
-            var sql = $@"
-DROP SCHEMA IF EXISTS {QuoteIdent(schema)} CASCADE;
-CREATE SCHEMA {QuoteIdent(schema)};";
-
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            await cmd.ExecuteNonQueryAsync(ct);
+            // Bu ortamda şema oluşturma/silme yetkisi yok.
+            // Bu nedenle ResetSchema hiçbir şey yapmadan dönüyor.
+            await Task.CompletedTask;
         }
 
         private static async Task CreateTargetTableAsync(
@@ -294,15 +290,13 @@ CREATE SCHEMA {QuoteIdent(schema)};";
         {
             var colsSql = string.Join(", ",
                 sutunlar.Select(s => $"{QuoteIdent(s.Ad)} {PgTypeFor(s)}"));
+
             var extraCols = @",
     batch_id uuid,
     data_date date";
 
+            // ❗ CREATE SCHEMA kaldırıldı — sadece tablo oluşturulur
             var sql = $@"
-CREATE SCHEMA IF NOT EXISTS {QuoteIdent(schema)};
-
-
-
 CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
 (
     {colsSql}{extraCols}
@@ -311,6 +305,7 @@ CREATE TABLE IF NOT EXISTS {QuoteIdent(schema)}.{QuoteIdent(table)}
             await using var cmd = new NpgsqlCommand(sql, conn);
             await cmd.ExecuteNonQueryAsync(ct);
         }
+
         private static string PgTypeFor(SutunOzeti s)
         {
             // 👉 Keşfedilen tip → PostgreSQL tipi

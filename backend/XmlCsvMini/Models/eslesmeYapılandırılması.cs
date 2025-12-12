@@ -98,7 +98,7 @@ namespace XmlCsvMini.Models
         public bool Etkin { get; set; } = true;
         public List<string> TohumAlanlar { get; set; } = new() { "./Id" };
         public string Algoritma { get; set; } = "sha1";   // "sha1" | "sha256"
-        public string KolonAdi { get; set; } = "entity_id";
+        public string KolonAdi { get; set; } = "global_entity_id";
     }
 
     public sealed class CiktiSecenekleri
