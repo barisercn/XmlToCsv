@@ -27,20 +27,20 @@ export async function uploadFileFetch({ file, endpoint = "/api/upload", fields =
         return await res.json();
     }
 
-    // İhtimal dahilinde: bazı endpoint'ler zip dönebilir
-    if (contentType.includes("application/zip")) {
-        const blob = await res.blob();
-        // Content-Disposition'dan dosya adı yakalamaya çalış
-        const disposition = res.headers.get("Content-Disposition") || "";
-        let filename = "download.zip";
+    // // İhtimal dahilinde: bazı endpoint'ler zip dönebilir
+    // if (contentType.includes("application/zip")) {
+    //     const blob = await res.blob();
+    //     // Content-Disposition'dan dosya adı yakalamaya çalış
+    //     const disposition = res.headers.get("Content-Disposition") || "";
+    //     let filename = "download.zip";
 
-        const match = /filename="?([^"]+)"?/i.exec(disposition);
-        if (match && match[1]) {
-            filename = match[1];
-        }
+    //     const match = /filename="?([^"]+)"?/i.exec(disposition);
+    //     if (match && match[1]) {
+    //         filename = match[1];
+    //     }
 
-        return { blob, filename };
-    }
+    //     return { blob, filename };
+    // }
 
     // Fallback: text dönmüşse
     const text = await res.text().catch(() => "");

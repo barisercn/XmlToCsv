@@ -84,9 +84,18 @@ namespace XmlCsvMini.Controllers
             if (!System.IO.File.Exists(zipPath))
                 return NotFound("Dosya bulunamadı veya zaten indirilmiş.");
 
-            var fileBytes = System.IO.File.ReadAllBytes(zipPath);
-
-            return File(fileBytes, "application/zip", filename);
+            try
+            {
+                // FileShare.Read ile dosyayı oku - başka process kullanıyorsa bile okuyabilir
+                using var fs = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                var fileBytes = new byte[fs.Length];
+                fs.Read(fileBytes, 0, (int)fs.Length);
+                return File(fileBytes, "application/zip", filename);
+            }
+            catch (IOException)
+            {
+                return StatusCode(503, "Dosya henüz hazırlanıyor, lütfen biraz bekleyip tekrar deneyin.");
+            }
         }
 
         /// <summary>
@@ -120,7 +129,15 @@ namespace XmlCsvMini.Controllers
                 Directory.CreateDirectory(outputDirectory);
 
                 // --- Asıl XML -> CSV işleme ---
-                RunProcessingLogic(girdiXml, outputDirectory, Path.GetFileNameWithoutExtension(orijinalDosyaAdi));
+                _log.LogInformation("XML işleme başlıyor: {FileName}", orijinalDosyaAdi);
+                
+                // SmartXmlToCsvExporter.Calistir senkron bir metot.
+                // Task.Run ile CPU-bound işi arka plan thread'ine alabiliriz ama zaten buradayız.
+                // Doğrudan çağırmak, bu Task içinde senkron olarak çalışmasını sağlar.
+                SmartXmlToCsvExporter.Calistir(girdiXml, outputDirectory);
+                
+                _log.LogInformation("XML işleme tamamlandı: {FileName}", orijinalDosyaAdi);
+                // --- Bitti ---
 
                 // Çıktı klasöründe dosya yoksa hata kabul ediyoruz
                 if (!Directory.EnumerateFiles(outputDirectory).Any())
@@ -130,7 +147,7 @@ namespace XmlCsvMini.Controllers
                         "Failed",
                         "XML işlendi fakat dönüştürülecek uygun veri bulunamadı. Lütfen XML yapısını kontrol edin."
                     );
-                    return;
+                    return; // finally bloğu çalışacak ama return sonrası
                 }
 
                 // Eski zip varsa sil ve yeniden oluştur
@@ -162,6 +179,8 @@ namespace XmlCsvMini.Controllers
                 try
                 {
                     // Girdi XML ve ara output klasörünü temizle
+                    // Bu blok artık try-catch'in ana gövdesi bittikten sonra çalışacağı için
+                    // dosya kilidi sorunu yaşanmayacak.
                     if (System.IO.File.Exists(girdiXml))
                         System.IO.File.Delete(girdiXml);
 
@@ -177,115 +196,6 @@ namespace XmlCsvMini.Controllers
             }
         }
 
-        /// <summary>
-        /// Daha önce Program.cs'te kullandığımız, XML keşfi + hiyerarşi + CSV üretim mantığı.
-        /// İçeriği aynen bırakıyoruz, sadece burada çağrılıyor.
-        /// </summary>
-        private void RunProcessingLogic(string girdiXml, string ciktiKlasoru, string originalFileName)
-        {
-            string geciciKlasor = Path.Combine(Path.GetTempPath(), "XmlCsvMini_" + Guid.NewGuid().ToString("N"));
 
-            try
-            {
-                Directory.CreateDirectory(geciciKlasor);
-                string raporYolu = Path.Combine(geciciKlasor, originalFileName + ".OnRapor.json");
-
-                // --- Keşif ---
-                var kesifci = new XmlKesifci();
-                var rapor = kesifci.Kesfet(
-                    girdiXml,
-                    ornekSayisi: 50_000_000,
-                    maksDerinlik: 15,
-                    adayMinTekrar: 1
-                );
-
-                var jsonAyar = new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                };
-                var raporJsonMetni = JsonSerializer.Serialize(rapor, jsonAyar);
-                System.IO.File.WriteAllText(raporYolu, raporJsonMetni);
-
-                // --- Konteynerleri filtreleme ---
-                var gecerliAdaylar = rapor.AdayKayitlar
-                    .Where(aday =>
-                        aday.Alanlar != null &&
-                        aday.Alanlar.Any(alan =>
-                            alan.Yol.Contains('@') ||
-                            alan.Yol.Contains("text()") ||
-                            (alan.Ornekler != null && alan.Ornekler.Count > 0)
-                        )
-                    )
-                    .ToList();
-
-                rapor.AdayKayitlar = gecerliAdaylar;
-
-                if (rapor.AdayKayitlar == null || rapor.AdayKayitlar.Count == 0)
-                    return;
-
-                // --- Hiyerarşi Analizi ---
-                var potansiyelAnaAdaylar = new List<AdayKayit>();
-                foreach (var aday in rapor.AdayKayitlar)
-                {
-                    bool buBirAltTablo = rapor.AdayKayitlar.Any(digerAday =>
-                        aday != digerAday &&
-                        aday.KayitYolu.StartsWith(digerAday.KayitYolu + "/",
-                            StringComparison.Ordinal));
-
-                    if (!buBirAltTablo)
-                        potansiyelAnaAdaylar.Add(aday);
-                }
-
-                List<AdayKayit> anaAdaylar;
-                if (potansiyelAnaAdaylar.Count == 1 &&
-                    potansiyelAnaAdaylar.First().TahminiKayitSayisi == 1)
-                {
-                    var kokKonteyner = potansiyelAnaAdaylar.First();
-                    var digerAdaylar = rapor.AdayKayitlar.Where(a => a != kokKonteyner).ToList();
-                    anaAdaylar = digerAdaylar
-                        .Where(aday =>
-                            !digerAdaylar.Any(diger =>
-                                aday != diger &&
-                                aday.KayitYolu.StartsWith(diger.KayitYolu + "/", StringComparison.Ordinal)))
-                        .ToList();
-                }
-                else
-                {
-                    anaAdaylar = potansiyelAnaAdaylar;
-                }
-
-                var hiyerarsiListesi = new List<TabloHiyerarsisi>();
-                foreach (var anaAday in anaAdaylar)
-                {
-                    var hiyerarsi = new TabloHiyerarsisi(anaAday);
-                    string anaYolPrefix = anaAday.KayitYolu + "/";
-
-                    foreach (var aday in rapor.AdayKayitlar)
-                    {
-                        if (aday != anaAday &&
-                            aday.KayitYolu.StartsWith(anaYolPrefix, StringComparison.Ordinal))
-                        {
-                            hiyerarsi.AltTablolar.Add(aday);
-                        }
-                    }
-
-                    hiyerarsiListesi.Add(hiyerarsi);
-                }
-
-                // --- XML → CSV (hiyerarşik) ---
-                XmlToCsvExporter.CalistirHiyerarsik(
-                    girdiXml,
-                    hiyerarsiListesi,
-                    ciktiKlasoru,
-                    rapor
-                );
-            }
-            finally
-            {
-                // Keşif çıktı klasörünü istersen silebilirsin
-                // try { if (Directory.Exists(geciciKlasor)) Directory.Delete(geciciKlasor, true); } catch { }
-            }
-        }
     }
 }

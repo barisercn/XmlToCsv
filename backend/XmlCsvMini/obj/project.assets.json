@@ -295,11 +295,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Barış\\Desktop\\veriÇekme\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
+      "projectUniqueName": "C:\\Users\\Barış\\Desktop\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
       "projectName": "XmlCsvMini",
-      "projectPath": "C:\\Users\\Barış\\Desktop\\veriÇekme\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
+      "projectPath": "C:\\Users\\Barış\\Desktop\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
       "packagesPath": "C:\\Users\\Barış\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Barış\\Desktop\\veriÇekme\\TablolaraDonusturme\\backend\\XmlCsvMini\\obj\\",
+      "outputPath": "C:\\Users\\Barış\\Desktop\\TablolaraDonusturme\\backend\\XmlCsvMini\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\Barış\\AppData\\Roaming\\NuGet\\NuGet.Config",

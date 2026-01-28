@@ -234,20 +234,23 @@ export default function FileUpload({
         const fileName = jobStatusResult.downloadFileName;
         const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
+        // ✅ TARİH ZORUNLU KONTROLÜ (burada hata fırlatıyoruz)
+        if (!dataDate || dataDate.trim() === "") {
+            addMessage("❌ Tarih seçilmedi. Lütfen verinin hangi tarihe ait olduğunu girin (YYYY-AA-GG).");
+            setStatus("error"); // veya "idle"
+            return; // fetch'e gitmesin
+        }
+
         setStatus("saving_db");
-        addMessage(
-            `💾 PostgreSQL'e kaydediliyor: ${fileName} ...`
-        );
+        addMessage(`💾 PostgreSQL'e kaydediliyor: ${fileName} ...`);
+
+        const payload = { fileName, loadType, dataDate: dataDate.trim() };
 
         try {
             const res = await fetch(`${BASE_URL}/api/dbyekaydet`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    fileName,
-                    loadType,   // "Full" veya "Daily"
-                    dataDate    // "2025-12-10" (veya boş ise backend bugün yapacak)
-                }),
+                body: JSON.stringify(payload),
             });
 
             if (!res.ok) {
@@ -260,12 +263,12 @@ export default function FileUpload({
             setStatus("done");
         } catch (err) {
             console.error(err);
-            addMessage(
-                `❌ Veritabanı Kayıt Hatası: ${err.message}`
-            );
+            addMessage(`❌ Veritabanı Kayıt Hatası: ${err.message}`);
             setStatus("error");
         }
     };
+
+
 
     return (
         <div className="upload-wrap">
@@ -411,12 +414,13 @@ export default function FileUpload({
                         </label>
 
                         <label>
-                            Veri Tarihi:&nbsp;
+                            Veri Tarihi: (opsiyonel)
                             <input
                                 type="date"
                                 value={dataDate}
                                 onChange={(e) => setDataDate(e.target.value)}
                             />
+                            <small>Boş bırakırsan backend bugünün tarihini kullanır.</small>
                         </label>
                     </div>
                 </div>

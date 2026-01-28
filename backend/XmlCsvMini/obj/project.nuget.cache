@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "wYC1vWHQWcw=",
+  "dgSpecHash": "pZkJqbv4CpU=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Barış\\Desktop\\veriÇekme\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
+  "projectFilePath": "C:\\Users\\Barış\\Desktop\\TablolaraDonusturme\\backend\\XmlCsvMini\\XmlCsvMini.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Barış\\.nuget\\packages\\csvhelper\\33.1.0\\csvhelper.33.1.0.nupkg.sha512",
     "C:\\Users\\Barış\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
