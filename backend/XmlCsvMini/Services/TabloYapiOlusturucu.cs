@@ -166,23 +166,37 @@ namespace XmlCsvMini.Services
 
             foreach (var altAday in altAdaylar)
             {
-                // Bu alt adayın üst aday içindeki kardinalitesini belirle
-                var kardinalite = AltAdayKardinalitesiBelirle(aday, altAday);
+                // ESKİ KOD: Kardinalite kontrolü yapıp 0..1 ise birleştiriyordu.
+                // YENİ KOD: Kardinaliteye bakmaksızın, eğer gerçek bir tablo adayı ise AYRI TABLO yap.
 
-                if (kardinalite == "0..1")
+                // Alt nesne, sadece basit bir attribute grubu değilse (karmaşık tipse) ayrı tablo olsun.
+                // Not: "GercekTabloAdayiMi" kontrolü zaten yukarıda "BulDogrudenAltAdaylar" içinde yapıldığı için
+                // burada direkt tablo oluşturma mantığına girebiliriz.
+
+                var altTabloYapisi = TabloYapisiOlusturRecursive(altAday, aday.KayitYolu, "");
+
+                if (altTabloYapisi != null)
                 {
-                    // Tekil: Düzleştir - alt adayın alanlarını prefix ile ekle
-                    var altPrefix = PrefixOlustur(prefix, altAday.KayitYolu, aday.KayitYolu);
-                    DuzlestirAltAdayRecursive(tabloYapisi, altAday, altPrefix);
-                }
-                else
-                {
-                    // Çoklu: Ayrı tablo oluştur
-                    var altTabloYapisi = TabloYapisiOlusturRecursive(altAday, aday.KayitYolu, "");
-                    if (altTabloYapisi != null)
+                    // ÖNEMLİ EKLEME: Oluşan alt tabloya, üst tabloyla ilişki kurabilmesi için
+                    // sanal bir "parent_id" sütunu ekliyoruz.
+                    // Eğer kök tablo değilse (yani bir üstü varsa) bu sütun şart.
+
+                    // Sütun adını snake_case yap (örn: records_entity_id veya sadece entity_id)
+                    string fkSutunAdi = "parent_id";
+                    // Veya üst tablonun adını kullanmak istersen:
+                    // string fkSutunAdi = TabloAdiOlustur(aday.KayitYolu) + "_id"; 
+
+                    // Parent ID sütununu listenin başına ekle
+                    altTabloYapisi.Sutunlar.Insert(0, new DuzSutun
                     {
-                        tabloYapisi.AltTablolar.Add(altTabloYapisi);
-                    }
+                        SutunAdi = fkSutunAdi,
+                        VeriTuru = CikarilanVeriTuru.String,
+                        KaynakYol = "Generated_ParentID", // Özel işaretleyici
+                        AttributeMi = false,
+                        TextMi = false
+                    });
+
+                    tabloYapisi.AltTablolar.Add(altTabloYapisi);
                 }
             }
 

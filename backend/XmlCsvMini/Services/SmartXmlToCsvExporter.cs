@@ -1,5 +1,6 @@
-// SmartXmlToCsvExporter.cs - Akıllı XML'den CSV'ye dönüştürücü v2
-// Tüm XML'i yükler, yapıyı analiz eder, düzleştirir
+// SmartXmlToCsvExporter.cs - v6 (Nihai "Flattening" Yöntemi)
+// Kullanıcının son revizyonuna göre, en detaylı tekrarlayan öğeyi temel alarak ve hem üst hem de
+// karmaşık alt öğelerden bağlamı "miras alarak" tek bir birleşik tabloya dönüştürür.
 
 using System;
 using System.Collections.Generic;
@@ -17,32 +18,16 @@ namespace XmlCsvMini.Services
 {
     public static class SmartXmlToCsvExporter
     {
-        /// <summary>
-        /// XML dosyasını akıllı şekilde CSV'lere dönüştürür.
-        /// </summary>
         public static void Calistir(string xmlYolu, string ciktiKlasoru)
         {
             Directory.CreateDirectory(ciktiKlasoru);
-
             Console.WriteLine($"XML yükleniyor: {xmlYolu}");
 
-            // XML'i yükle
             XDocument doc;
-            var settings = new System.Xml.XmlReaderSettings
-            {
-                IgnoreWhitespace = true,
-                IgnoreComments = true,
-                DtdProcessing = System.Xml.DtdProcessing.Ignore,
-                CloseInput = true  // Dosyayı düzgün kapat
-            };
-            using (var reader = EncodingAwareXml.CreateAutoXmlReader(xmlYolu, settings))
+            using (var reader = EncodingAwareXml.CreateAutoXmlReader(xmlYolu, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Ignore }))
             {
                 doc = XDocument.Load(reader);
             }
-
-            // GC'yi zorla çalıştır - dosya kilidini serbest bırak
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
 
             if (doc.Root == null)
             {
@@ -52,168 +37,133 @@ namespace XmlCsvMini.Services
 
             Console.WriteLine($"XML yüklendi. Root: {doc.Root.Name.LocalName}");
 
-            // 1. ADIM: Tekrarlayan elemanları bul
-            var tekrarlayanlar = TekrarlayanElemanlariTespit(doc.Root);
+            var (tekrarlayanlar, gercekContainerAdlari, wrapperAdlari) = TekrarlayanElemanlariTespit(doc.Root);
+            Console.WriteLine($"\nOluşturulacak tablolar ({tekrarlayanlar.Count}):");
+            foreach (var t in tekrarlayanlar.OrderBy(p => p).Take(50)) Console.WriteLine($"  - {t}");
+            Console.WriteLine($"\nGerçek container'lar: {string.Join(", ", gercekContainerAdlari.OrderBy(x => x))}");
+            Console.WriteLine($"Otomatik wrapper'lar: {string.Join(", ", wrapperAdlari.OrderBy(x => x))}");
 
-            Console.WriteLine($"\nTekrarlayan elemanlar ({tekrarlayanlar.Count}):");
-            foreach (var t in tekrarlayanlar.Take(20))
-            {
-                Console.WriteLine($"  - {t}");
-            }
-
-            // 2. ADIM: Her tekrarlayan eleman için CSV oluştur
-            var islenmisTablolar = new HashSet<string>();
             var olusturulanTabloAdlari = new HashSet<string>();
 
             foreach (var yol in tekrarlayanlar.OrderBy(y => y.Length))
             {
-                // Tabloyu işle
-                var tabloAdi = TabloAdiOlustur(yol);
+                var elemanlar = BulElemanlar(doc.Root, yol);
+                if (elemanlar.Count == 0) continue;
 
-                // Aynı isimde tablo varsa, tam yoldan benzersiz isim oluştur
-                if (olusturulanTabloAdlari.Contains(tabloAdi))
-                {
-                    tabloAdi = string.Join("_", yol.Split('/', StringSplitOptions.RemoveEmptyEntries)
-                        .Skip(1).Select(SnakeCase));
-                }
+                var tabloAdi = TabloAdiOlustur(yol, olusturulanTabloAdlari, gercekContainerAdlari, wrapperAdlari);
                 var csvYolu = Path.Combine(ciktiKlasoru, $"{tabloAdi}.csv");
 
                 Console.WriteLine($"\nTablo oluşturuluyor: {tabloAdi}");
-
-                // Bu yoldaki elemanları bul
-                var elemanlar = BulElemanlar(doc.Root, yol);
-
-                if (elemanlar.Count == 0)
-                {
-                    Console.WriteLine("  UYARI: Hiç eleman bulunamadı!");
-                    continue;
-                }
-
                 Console.WriteLine($"  {elemanlar.Count} kayıt bulundu");
 
-                // Sütunları belirle (ilk elemandan)
-                var sutunlar = SutunlariBelirle(elemanlar.First(), tekrarlayanlar, yol);
+                var sutunlar = SutunlariBelirle(elemanlar, tekrarlayanlar);
+                EntityIdSutunuEkle(sutunlar, elemanlar.First());
 
-                // Entity ID sütunu ekle (Entity veya SpecialEntity altındaysa)
-                var ilkEleman = elemanlar.First();
-                bool entityAltinda = ilkEleman.Ancestors().Any(a =>
-                    a.Name.LocalName.Equals("Entity", StringComparison.OrdinalIgnoreCase) ||
-                    a.Name.LocalName.Equals("SpecialEntity", StringComparison.OrdinalIgnoreCase) ||
-                    a.Name.LocalName.Equals("Person", StringComparison.OrdinalIgnoreCase));
+                var siraliSutunlar = sutunlar.OrderBy(s => s.Ad).ToList();
 
-                if (entityAltinda)
-                {
-                    sutunlar.Insert(0, new SutunBilgisi { Ad = "entity_id", Tip = SutunTipi.EntityId });
-                }
+                Console.WriteLine($"  Sütunlar: {string.Join(", ", siraliSutunlar.Select(s => s.Ad))}");
 
-                // Parent ID sütunu ekle (parent'ın id'si varsa ve Entity değilse)
-                var (parentYol, parentElement) = ParentBul(ilkEleman, tekrarlayanlar);
-                if (!string.IsNullOrEmpty(parentYol) && parentElement != null)
-                {
-                    // Parent'ın kendisi Entity/SpecialEntity değilse
-                    var parentAdi = parentYol.Split('/').Last();
-                    bool parentIsEntity = parentAdi.Equals("Entity", StringComparison.OrdinalIgnoreCase) ||
-                                          parentAdi.Equals("SpecialEntity", StringComparison.OrdinalIgnoreCase) ||
-                                          parentAdi.Equals("Person", StringComparison.OrdinalIgnoreCase);
+                YazCsv(csvYolu, elemanlar, siraliSutunlar);
 
-                    // Parent'ın gerçekten id veya code attribute'u var mı kontrol et
-                    bool parentHasId = parentElement.Attributes().Any(a =>
-                        a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase) ||
-                        a.Name.LocalName.Equals("code", StringComparison.OrdinalIgnoreCase));
-
-                    if (!parentIsEntity && parentHasId)
-                    {
-                        sutunlar.Insert(0, new SutunBilgisi { Ad = "parent_id", Tip = SutunTipi.ParentId });
-                    }
-                }
-
-                Console.WriteLine($"  Sütunlar: {string.Join(", ", sutunlar.Select(s => s.Ad))}");
-
-                // CSV'ye yaz
-                using var sw = new StreamWriter(csvYolu, false, new UTF8Encoding(true));
-                using var csv = new CsvWriter(sw, new CsvConfiguration(CultureInfo.InvariantCulture)
-                {
-                    Delimiter = ";",
-                    HasHeaderRecord = true
-                });
-
-                // Header
-                foreach (var sutun in sutunlar)
-                {
-                    csv.WriteField(sutun.Ad);
-                }
-                csv.NextRecord();
-
-                // Veriler
-                int yazilan = 0;
-                foreach (var el in elemanlar)
-                {
-                    var parentInfo = ParentBul(el, tekrarlayanlar);
-                    foreach (var sutun in sutunlar)
-                    {
-                        var deger = DegerCek(el, sutun, parentInfo);
-                        csv.WriteField(deger);
-                    }
-                    csv.NextRecord();
-                    yazilan++;
-                }
-
-                Console.WriteLine($"  {yazilan} satır yazıldı");
-
-                islenmisTablolar.Add(yol);
                 olusturulanTabloAdlari.Add(tabloAdi);
             }
 
-            Console.WriteLine($"\nToplam {islenmisTablolar.Count} tablo oluşturuldu.");
+            Console.WriteLine($"\nToplam {olusturulanTabloAdlari.Count} tablo oluşturuldu.");
         }
 
         /// <summary>
-        /// Tekrarlayan elemanları tespit eder.
-        /// Bir eleman tekrarlıyordur eğer:
-        /// 1. Parent içinde birden fazla kardeşi varsa
-        /// 2. Parent'ı "List", "Details", "Types", "References" gibi container ise
+        /// Tekrarlayan elemanları tespit eder ve hangi eleman adlarının gerçek container olduğunu belirler.
+        /// Gerçek container: Çocuklarının TAMAMI karmaşık element olan sarmalayıcı (NameDetails, DateDetails vb.)
+        /// Veri taşıyan: Çocuklarında yaprak metin elemanı bulunan (CompanyDetails → AddressLine gibi)
         /// </summary>
-        private static HashSet<string> TekrarlayanElemanlariTespit(XElement root)
+        private static (HashSet<string> tekrarlayanlar, HashSet<string> gercekContainerAdlari, HashSet<string> wrapperAdlari) TekrarlayanElemanlariTespit(XElement root)
         {
             var sonuc = new HashSet<string>();
+            var containerSuffixes = new[] { "List", "Types", "References", "Details" };
 
-            // Container pattern'leri - bunların child'ları tekrarlayan sayılır
-            var containerSuffixes = new[] { "List", "Types", "References" };
+            // Container suffix'i olan elemanların gerçekten container mı yoksa veri taşıyan mı
+            // olduğunu tespit etmek için: çocuklarında yaprak-metin elemanı var mı kontrol et.
+            var veriTasiyorMu = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+            // Wrapper tespiti: Attribute'sız, text'siz, tek tip çocuğu olan elemanlar.
+            // Örn: Records (sadece Entity içerir), Associations (sadece SpecialEntity),
+            //       Descriptions (sadece Description), SourceDescription (sadece Source)
+            // Bu elemanlar yapısal sarmalayıcıdır, veri taşımazlar.
+            // Key: eleman adı, Value: hâlâ wrapper adayı mı?
+            var wrapperAdayi = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
             void Tara(XElement el, string yol)
             {
-                var cocukGruplari = el.Elements()
-                    .GroupBy(c => c.Name.LocalName)
-                    .ToList();
+                var elAdi = el.Name.LocalName;
 
-                // Parent bir container mı? (CountryList, OccupationList, vb.)
-                bool parentIsContainer = containerSuffixes.Any(s =>
-                    el.Name.LocalName.EndsWith(s, StringComparison.OrdinalIgnoreCase));
+                // ── Wrapper tespit ──
+                if (!wrapperAdayi.ContainsKey(elAdi))
+                    wrapperAdayi[elAdi] = true;
+
+                if (wrapperAdayi[elAdi])
+                {
+                    // Attribute varsa → wrapper değil
+                    if (el.HasAttributes)
+                        wrapperAdayi[elAdi] = false;
+                    // Kendi text içeriği varsa → wrapper değil
+                    else if (el.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)))
+                        wrapperAdayi[elAdi] = false;
+                    // Çocuk elementi yoksa (yaprak) → wrapper değil
+                    else if (!el.HasElements)
+                        wrapperAdayi[elAdi] = false;
+                    // Birden fazla farklı çocuk tipi varsa → wrapper değil
+                    else if (el.Elements().Select(c => c.Name.LocalName).Distinct().Count() > 1)
+                        wrapperAdayi[elAdi] = false;
+                }
+
+                // ── Container suffix kontrolü ──
+                if (containerSuffixes.Any(s => elAdi.EndsWith(s, StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (!veriTasiyorMu.ContainsKey(elAdi))
+                        veriTasiyorMu[elAdi] = false;
+
+                    bool yaprakCocuguVar = el.Elements().Any(c => !c.HasElements && !c.HasAttributes);
+                    if (yaprakCocuguVar)
+                        veriTasiyorMu[elAdi] = true;
+                }
+
+                // Veri taşıyan container-suffix elemanları her zaman ayrı tablo adayı yap (Entity altındaysa)
+                if (containerSuffixes.Any(s => elAdi.EndsWith(s, StringComparison.OrdinalIgnoreCase))
+                    && veriTasiyorMu.TryGetValue(elAdi, out var tasiyor) && tasiyor)
+                {
+                    if (el.Ancestors().Any(a => a.Name.LocalName.Equals("Entity", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        sonuc.Add(yol);
+                    }
+                }
+
+                // NameValue'yu her zaman ayrı tablo olarak değerlendir
+                if (elAdi == "NameValue")
+                {
+                    if (el.Ancestors().Any(a => a.Name.LocalName == "Entity"))
+                    {
+                        sonuc.Add(yol);
+                    }
+                }
+
+                var cocukGruplari = el.Elements().GroupBy(c => c.Name.LocalName).ToList();
+                bool parentIsContainer = el.Parent != null && containerSuffixes.Any(s => el.Parent.Name.LocalName.EndsWith(s, StringComparison.OrdinalIgnoreCase));
 
                 foreach (var grup in cocukGruplari)
                 {
                     var cocukYol = yol + "/" + grup.Key;
-
-                    // Bu çocuk tekrarlıyor mu?
-                    bool tekrarliyor = false;
-
-                    // Kural 1: Birden fazla kardeş
                     if (grup.Count() > 1)
-                    {
-                        tekrarliyor = true;
-                    }
-                    // Kural 2: Parent bir container (List, Types, References ile biter)
-                    else if (parentIsContainer)
-                    {
-                        tekrarliyor = true;
-                    }
-
-                    if (tekrarliyor)
                     {
                         sonuc.Add(cocukYol);
                     }
+                    else if (parentIsContainer)
+                    {
+                        if (grup.Any(e => e.HasElements || e.HasAttributes))
+                        {
+                            sonuc.Add(cocukYol);
+                        }
+                    }
 
-                    // Alt elemanları tara
                     foreach (var cocuk in grup)
                     {
                         Tara(cocuk, cocukYol);
@@ -223,352 +173,332 @@ namespace XmlCsvMini.Services
 
             Tara(root, "/" + root.Name.LocalName);
 
-            // Yaprak elemanları çıkar (sadece text içeren, child element'i ve attribute'ı olmayan)
-            var yapraklar = sonuc.Where(yol =>
+            // ── Gerçek container adlarını belirle ──
+            var gercekContainerAdlari = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in veriTasiyorMu)
             {
-                var ornek = BulIlkEleman(root, yol);
-                if (ornek == null) return false;
-
-                // Hiç child elementi yoksa ve attribute'ı da yoksa yaprak - tablo yapma
-                return !ornek.HasElements && !ornek.HasAttributes;
-            }).ToList();
-
-            foreach (var yaprak in yapraklar)
-            {
-                sonuc.Remove(yaprak);
+                if (!kvp.Value)
+                    gercekContainerAdlari.Add(kvp.Key);
             }
 
-            return sonuc;
-        }
-
-        /// <summary>
-        /// Belirli bir yoldaki ilk elemanı bulur.
-        /// </summary>
-        private static XElement? BulIlkEleman(XElement root, string yol)
-        {
-            var parcalar = yol.Split('/', StringSplitOptions.RemoveEmptyEntries).Skip(1).ToList();
-
-            XElement? mevcut = root;
-            foreach (var parca in parcalar)
+            // ── Wrapper adlarını belirle ──
+            // Container suffix olanları wrapper'dan çıkar (zaten container olarak ele alınıyor)
+            var wrapperAdlari = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in wrapperAdayi)
             {
-                mevcut = mevcut?.Elements().FirstOrDefault(e => e.Name.LocalName == parca);
-                if (mevcut == null) break;
+                if (kvp.Value && !gercekContainerAdlari.Contains(kvp.Key)
+                              && !containerSuffixes.Any(s => kvp.Key.EndsWith(s, StringComparison.OrdinalIgnoreCase)))
+                    wrapperAdlari.Add(kvp.Key);
             }
 
-            return mevcut;
-        }
-
-        /// <summary>
-        /// Belirli bir yoldaki tüm elemanları bulur.
-        /// </summary>
-        private static List<XElement> BulElemanlar(XElement root, string yol)
-        {
-            var parcalar = yol.Split('/', StringSplitOptions.RemoveEmptyEntries).Skip(1).ToList();
-
-            IEnumerable<XElement> mevcut = new[] { root };
-
-            foreach (var parca in parcalar)
+            // ═══════════════════════════════════════════════════════════════
+            // BUDAMA AŞAMASI 1: Gerçek container'ları (NameDetails, DateDetails vb.) sil
+            // ═══════════════════════════════════════════════════════════════
+            var atilacaklar = new HashSet<string>();
+            foreach (var yol in sonuc)
             {
-                mevcut = mevcut.SelectMany(e => e.Elements().Where(c => c.Name.LocalName == parca));
+                if (yol.Count(c => c == '/') < 2) continue;
+                var parentPath = yol.Substring(0, yol.LastIndexOf('/'));
+                if (sonuc.Contains(parentPath))
+                {
+                    var parentName = parentPath.Split('/').Last();
+                    if (gercekContainerAdlari.Contains(parentName))
+                    {
+                        // Gerçek container: kendisini sil, çocuğu kalsın
+                        atilacaklar.Add(parentPath);
+                    }
+                    // else: Veri taşıyan parent → ikisini de koru
+                }
             }
+            sonuc.ExceptWith(atilacaklar);
 
-            return mevcut.ToList();
+            // ═══════════════════════════════════════════════════════════════
+            // BUDAMA AŞAMASI 2: Anchor tablo absorpsiyonu
+            // Anchor tablo = veriyi tek noktada birleştiren eleman (NameValue gibi).
+            // - Çocuklarını absorbe eder → sütun olarak kalır (EntityName, OriginalScriptName, Suffix)
+            // - Parent'ını absorbe eder → attribute olarak kalır (Name → NameType)
+            //   (Sadece parent'ın yaprak-metin çocuğu yoksa, yani saf wrapper ise)
+            // ═══════════════════════════════════════════════════════════════
+            var anchorAtilacaklar = new HashSet<string>();
+            foreach (var yol in sonuc.ToList())
+            {
+                var elAdi = yol.Split('/').Last();
+                if (elAdi != "NameValue") continue; // Şimdilik NameValue anchor
+
+                // 2a. Çocuk path'leri sil → sütun olarak kalacaklar
+                foreach (var digerYol in sonuc)
+                {
+                    if (digerYol.StartsWith(yol + "/"))
+                        anchorAtilacaklar.Add(digerYol);
+                }
+
+                // 2b. Parent path'i sil → attribute olarak NameValue'ya geçecek
+                // (Sadece parent'ın kendi yaprak-metin çocuğu yoksa.
+                //  Örn: Name sadece NameValue içerir, kendi text'i yok → wrapper → sil)
+                var parentPath = yol.Substring(0, yol.LastIndexOf('/'));
+                if (sonuc.Contains(parentPath))
+                {
+                    var parentElemanlar = BulElemanlar(root, parentPath);
+                    // Parent'ın yaprak-metin çocuğu var mı? (attribute'sız, element'siz, sadece text)
+                    bool parentSadeceWrapper = !parentElemanlar.Any(pe =>
+                        pe.Elements().Any(c => !c.HasElements && !c.HasAttributes
+                                            && !string.IsNullOrWhiteSpace(c.Value)));
+                    if (parentSadeceWrapper)
+                    {
+                        anchorAtilacaklar.Add(parentPath);
+                        Console.WriteLine($"  [Anchor] {elAdi} parent'ı absorbe etti: {parentPath.Split('/').Last()}");
+                    }
+                }
+            }
+            sonuc.ExceptWith(anchorAtilacaklar);
+
+            return (sonuc, gercekContainerAdlari, wrapperAdlari);
         }
 
-        /// <summary>
-        /// Bir eleman için sütunları belirler.
-        /// Yaprak child'lar ve attribute'lar sütun olur.
-        /// Tekrarlayan child'lar sütun olmaz (ayrı tablo olacaklar).
-        /// </summary>
-        private static List<SutunBilgisi> SutunlariBelirle(XElement ornek, HashSet<string> tekrarlayanlar, string tabloYolu)
+        private static List<SutunBilgisi> SutunlariBelirle(List<XElement> elemanlar, HashSet<string> tekrarlayanlar)
         {
             var sutunlar = new List<SutunBilgisi>();
+            if (!elemanlar.Any()) return sutunlar;
 
-            // 1. Kendi attribute'ları
-            foreach (var attr in ornek.Attributes().OrderBy(a => a.Name.LocalName))
+            // 1. Üst elementlerin niteliklerini topla (örn: Name'den NameType'ı almak için)
+            var tumUstNitelikler = elemanlar.Select(el => el.Parent).Where(p => p != null)
+                .SelectMany(p => p.Attributes())
+                .Where(a => !a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase))
+                .Select(a => a.Name.LocalName).Distinct();
+            foreach (var attrName in tumUstNitelikler)
             {
-                if (attr.Name.LocalName.StartsWith("xmlns"))
-                    continue;
-
-                sutunlar.Add(new SutunBilgisi
-                {
-                    Ad = SnakeCase(attr.Name.LocalName),
-                    Tip = SutunTipi.Attribute,
-                    Kaynak = attr.Name.LocalName
-                });
+                sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(attrName), Tip = SutunTipi.ParentAttribute, Kaynak = attrName });
             }
 
-            // 2. Child elemanları tara
-            var cocuklar = ornek.Elements()
-                .GroupBy(e => e.Name.LocalName)
-                .ToList();
-
-            foreach (var grup in cocuklar.OrderBy(g => g.Key))
+            // 2. Kendi niteliklerini topla
+            var tumKendiNitelikleri = elemanlar.SelectMany(el => el.Attributes()).Select(a => a.Name.LocalName).Distinct();
+            foreach (var attrName in tumKendiNitelikleri)
             {
-                var cocukYol = tabloYolu + "/" + grup.Key;
+                sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(attrName), Tip = SutunTipi.Attribute, Kaynak = attrName });
+            }
+            
+            // 3. Çocuk elementleri analiz et
+            var tumCocukGruplari = elemanlar.SelectMany(el => el.Elements()).GroupBy(c => c.Name.LocalName);
+            foreach (var grup in tumCocukGruplari)
+            {
+                var cocukAdi = grup.Key;
+                var ornekCocuk = grup.First();
 
-                // Bu child tekrarlayan bir tablo mu?
-                if (tekrarlayanlar.Contains(cocukYol))
-                    continue; // Ayrı tablo olacak, sütun olarak ekleme
-
-                var ilkCocuk = grup.First();
-
-                // Child'ın attribute'ları
-                foreach (var attr in ilkCocuk.Attributes().OrderBy(a => a.Name.LocalName))
+                // Eğer bu çocuk grubu, başka bir tablo olarak zaten işlenecekse, onu burada düzleştirme.
+                if (tekrarlayanlar.Contains(GetElementPath(ornekCocuk)))
                 {
-                    if (attr.Name.LocalName.StartsWith("xmlns"))
-                        continue;
-
-                    sutunlar.Add(new SutunBilgisi
-                    {
-                        Ad = SnakeCase(grup.Key + "_" + attr.Name.LocalName),
-                        Tip = SutunTipi.ChildAttribute,
-                        Kaynak = grup.Key,
-                        AltKaynak = attr.Name.LocalName
-                    });
+                    continue;
                 }
-
-                // Child'ın text değeri veya alt child'ları
-                if (ilkCocuk.HasElements)
+                
+                // 3a. Çocuk yaprak ise (içinde başka element yoksa), metin değerini sütun yap. Örn: <EntityName>
+                if (!ornekCocuk.HasElements)
                 {
-                    // Alt child'ları recursive ekle (2 seviye)
-                    foreach (var altGrup in ilkCocuk.Elements().GroupBy(e => e.Name.LocalName).OrderBy(g => g.Key))
-                    {
-                        var altCocukYol = cocukYol + "/" + altGrup.Key;
-
-                        // Bu da tekrarlayan mı?
-                        if (tekrarlayanlar.Contains(altCocukYol))
-                            continue;
-
-                        var ilkAlt = altGrup.First();
-
-                        // Alt child attribute'ları
-                        foreach (var attr in ilkAlt.Attributes().OrderBy(a => a.Name.LocalName))
-                        {
-                            if (attr.Name.LocalName.StartsWith("xmlns"))
-                                continue;
-
-                            sutunlar.Add(new SutunBilgisi
-                            {
-                                Ad = SnakeCase(grup.Key + "_" + altGrup.Key + "_" + attr.Name.LocalName),
-                                Tip = SutunTipi.NestedAttribute,
-                                Kaynak = grup.Key + "/" + altGrup.Key,
-                                AltKaynak = attr.Name.LocalName
-                            });
-                        }
-
-                        // Alt child text değeri
-                        if (!ilkAlt.HasElements)
-                        {
-                            sutunlar.Add(new SutunBilgisi
-                            {
-                                Ad = SnakeCase(grup.Key + "_" + altGrup.Key),
-                                Tip = SutunTipi.NestedText,
-                                Kaynak = grup.Key + "/" + altGrup.Key
-                            });
-                        }
-                    }
+                    sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(cocukAdi), Tip = SutunTipi.ChildText, Kaynak = cocukAdi });
                 }
+                // 3b. Çocuk karmaşık ama ayrı bir tablo değilse, niteliklerini sütun yap. Örn: <DateValue> 
                 else
                 {
-                    // Yaprak child - text değeri
-                    sutunlar.Add(new SutunBilgisi
+                    var tumCocukNitelikleri = grup.SelectMany(c => c.Attributes()).Select(a => a.Name.LocalName).Distinct();
+                    foreach (var attrName in tumCocukNitelikleri)
                     {
-                        Ad = SnakeCase(grup.Key),
-                        Tip = SutunTipi.ChildText,
-                        Kaynak = grup.Key
-                    });
-                }
-            }
-
-            // 3. Kendi text değeri (child element yoksa)
-            if (!ornek.HasElements && !string.IsNullOrWhiteSpace(ornek.Value))
-            {
-                sutunlar.Add(new SutunBilgisi
-                {
-                    Ad = "value",
-                    Tip = SutunTipi.Text
-                });
-            }
-
-            return sutunlar;
-        }
-
-        /// <summary>
-        /// Parent tablo yolunu ve o tabloya ait en yakın üst elemanı bulur.
-        /// </summary>
-        private static (string? parentYol, XElement? parentElement) ParentBul(XElement mevcutEleman, HashSet<string> tekrarlayanlar)
-        {
-            var mevcutYolParcalari = mevcutEleman.AncestorsAndSelf().Select(a => a.Name.LocalName).Reverse().ToList();
-
-            for (int i = mevcutYolParcalari.Count - 2; i >= 0; i--)
-            {
-                var potansiyelParentYol = "/" + string.Join("/", mevcutYolParcalari.Take(i + 1));
-                if (tekrarlayanlar.Contains(potansiyelParentYol))
-                {
-                    // Bu yola uyan en yakın parent elementi bul
-                    var parentElement = mevcutEleman.Parent;
-                    while (parentElement != null)
-                    {
-                        var parentYolParcalari = parentElement.AncestorsAndSelf().Select(a => a.Name.LocalName).Reverse().ToList();
-                        var parentYol = "/" + string.Join("/", parentYolParcalari);
-
-                        if (parentYol == potansiyelParentYol)
-                        {
-                            return (potansiyelParentYol, parentElement);
-                        }
-                        parentElement = parentElement.Parent;
+                        sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(cocukAdi + "_" + attrName), Tip = SutunTipi.ChildAttribute, Kaynak = cocukAdi, AltKaynak = attrName });
                     }
                 }
             }
 
-            return (null, null);
+            // 4. Kendi metin değeri (eğer hiç çocuk elementi yoksa. örn: <IDValue>)
+            if (!elemanlar.First().HasElements && elemanlar.Any(e => !string.IsNullOrWhiteSpace(e.Value)))
+            {
+                sutunlar.Add(new SutunBilgisi { Ad = "value", Tip = SutunTipi.Text });
+            }
+            
+            return sutunlar.GroupBy(s => s.Ad).Select(g => g.First()).ToList(); // Aynı isimde sütunları tekilleştir.
         }
 
-        /// <summary>
-        /// Elemandan değer çeker.
-        /// </summary>
-        private static string DegerCek(XElement el, SutunBilgisi sutun, (string? parentYol, XElement? parentElement) parentInfo)
+        private static void YazCsv(string csvYolu, List<XElement> elemanlar, List<SutunBilgisi> sutunlar)
+        {
+            using var sw = new StreamWriter(csvYolu, false, new UTF8Encoding(true));
+            using var csv = new CsvWriter(sw, new CsvConfiguration(CultureInfo.InvariantCulture) { Delimiter = ";", HasHeaderRecord = true });
+
+            foreach (var sutun in sutunlar) csv.WriteField(sutun.Ad);
+            csv.NextRecord();
+
+            foreach (var el in elemanlar)
+            {
+                foreach (var sutun in sutunlar)
+                {
+                    csv.WriteField(DegerCek(el, sutun));
+                }
+                csv.NextRecord();
+            }
+        }
+        
+        private static string DegerCek(XElement el, SutunBilgisi sutun)
         {
             switch (sutun.Tip)
             {
-                case SutunTipi.ParentId:
-                    // Hiyerarşide yukarı çıkarak id'si olan ilk ancestor'u bul (Entity/SpecialEntity hariç)
-                    var parentAncestor = el.Parent;
-                    while (parentAncestor != null)
-                    {
-                        // Entity/SpecialEntity'ye ulaştıysak dur (entity_id onu alacak)
-                        if (parentAncestor.Name.LocalName.Equals("Entity", StringComparison.OrdinalIgnoreCase) ||
-                            parentAncestor.Name.LocalName.Equals("SpecialEntity", StringComparison.OrdinalIgnoreCase) ||
-                            parentAncestor.Name.LocalName.Equals("Person", StringComparison.OrdinalIgnoreCase))
-                        {
-                            break;
-                        }
-
-                        // "id", "Id", "ID" ara
-                        var idAttr = parentAncestor.Attributes()
-                            .FirstOrDefault(a => a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase));
-                        if (idAttr != null) return idAttr.Value;
-
-                        // "code" ara
-                        var codeAttr = parentAncestor.Attributes()
-                            .FirstOrDefault(a => a.Name.LocalName.Equals("code", StringComparison.OrdinalIgnoreCase));
-                        if (codeAttr != null) return codeAttr.Value;
-
-                        parentAncestor = parentAncestor.Parent;
-                    }
-                    return "";
-
                 case SutunTipi.EntityId:
-                    // Entity veya SpecialEntity seviyesine kadar çık ve id'sini al
-                    var entityAncestor = el.Parent;
-                    while (entityAncestor != null)
-                    {
-                        if (entityAncestor.Name.LocalName.Equals("Entity", StringComparison.OrdinalIgnoreCase) ||
-                            entityAncestor.Name.LocalName.Equals("SpecialEntity", StringComparison.OrdinalIgnoreCase) ||
-                            entityAncestor.Name.LocalName.Equals("Person", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var idAttr = entityAncestor.Attributes()
-                                .FirstOrDefault(a => a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase));
-                            if (idAttr != null) return idAttr.Value;
-                        }
-                        entityAncestor = entityAncestor.Parent;
-                    }
-                    return "";
-
+                    var ancestor = el.Ancestors().FirstOrDefault(a => a.Name.LocalName.Equals("Entity", StringComparison.OrdinalIgnoreCase) ||
+                                                                    a.Name.LocalName.Equals("SpecialEntity", StringComparison.OrdinalIgnoreCase));
+                    return ancestor?.Attribute("id")?.Value ?? "";
+                case SutunTipi.ParentAttribute:
+                    return el.Parent?.Attribute(sutun.Kaynak)?.Value ?? "";
                 case SutunTipi.Attribute:
                     return el.Attribute(sutun.Kaynak)?.Value ?? "";
-
                 case SutunTipi.Text:
                     return el.Value?.Trim() ?? "";
-
                 case SutunTipi.ChildText:
-                    var child = el.Element(sutun.Kaynak);
-                    return child?.Value?.Trim() ?? "";
-
+                    return el.Element(sutun.Kaynak)?.Value?.Trim() ?? "";
                 case SutunTipi.ChildAttribute:
-                    var childEl = el.Element(sutun.Kaynak);
-                    return childEl?.Attribute(sutun.AltKaynak)?.Value ?? "";
-
-                case SutunTipi.NestedText:
-                    var parts = sutun.Kaynak.Split('/');
-                    XElement? current = el;
-                    foreach (var part in parts)
-                    {
-                        current = current?.Element(part);
-                    }
-                    return current?.Value?.Trim() ?? "";
-
-                case SutunTipi.NestedAttribute:
-                    var nestedParts = sutun.Kaynak.Split('/');
-                    XElement? nestedCurrent = el;
-                    foreach (var part in nestedParts)
-                    {
-                        nestedCurrent = nestedCurrent?.Element(part);
-                    }
-                    return nestedCurrent?.Attribute(sutun.AltKaynak)?.Value ?? "";
-
+                    return el.Element(sutun.Kaynak)?.Attribute(sutun.AltKaynak)?.Value ?? "";
                 default:
                     return "";
             }
         }
 
+        #region Yardımcı Metotlar
+
+        private static string GetElementPath(XElement el)
+        {
+            if (el == null) return "";
+            return "/" + string.Join("/", el.AncestorsAndSelf().Select(a => a.Name.LocalName).Reverse());
+        }
+
+        private static List<XElement> BulElemanlar(XElement root, string yol)
+        {
+            IEnumerable<XElement> mevcut = new[] { root };
+            foreach (var parca in yol.Split('/', StringSplitOptions.RemoveEmptyEntries).Skip(1))
+            {
+                mevcut = mevcut.SelectMany(e => e.Elements(parca));
+            }
+            return mevcut.ToList();
+        }
+
         /// <summary>
-        /// Tablo adı oluşturur.
+        /// Evrensel tablo adı oluşturma kuralları:
+        /// 1. Root'u atla
+        /// 2. Wrapper'ları filtrele (Records, Descriptions gibi otomatik tespit edilenler)
+        /// 3. Container'ları kök adıyla değiştir (IDNumberTypes → IDNumber, DateDetails → Date)
+        /// 4. "Value" son ekini kaldır (NameValue → Name, DateValue → Date)
+        /// 5. Ardışık tekrar eden kökleri tekilleştir (Date/Date → Date)
+        /// 6. Son 3 anlamlı parçadan snake_case ad oluştur
+        /// 7. Çakışma varsa tüm parçaları kullan
         /// </summary>
-        private static string TabloAdiOlustur(string yol)
+        private static string TabloAdiOlustur(string yol, HashSet<string> mevcutAdlar,
+            HashSet<string> gercekContainerAdlari, HashSet<string> wrapperAdlari)
         {
             var parcalar = yol.Split('/', StringSplitOptions.RemoveEmptyEntries);
 
-            if (parcalar.Length <= 2)
+            // Adım 1-3: Root atla, wrapper filtrele, container → kök adı
+            var anlamliParcalar = new List<string>();
+            foreach (var p in parcalar.Skip(1)) // Root'u atla
             {
-                return SnakeCase(parcalar.Last());
+                if (wrapperAdlari.Contains(p))
+                    continue; // Wrapper: tamamen atla
+
+                if (gercekContainerAdlari.Contains(p))
+                {
+                    // Container: suffix'leri sıyırıp kök adını al (IDNumberTypes → IDNumber)
+                    anlamliParcalar.Add(ContainerKokAdi(p));
+                    continue;
+                }
+
+                anlamliParcalar.Add(p);
             }
 
-            // "List" ile biten container'ları atla
-            var anlamliParcalar = parcalar
-                .Skip(1) // Root'u atla
-                .Where(p => !p.EndsWith("List", StringComparison.OrdinalIgnoreCase) &&
-                           !p.EndsWith("Details", StringComparison.OrdinalIgnoreCase) &&
-                           !p.EndsWith("Types", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            if (anlamliParcalar.Count == 0)
+            // Adım 4: "Value" son ekini kaldır
+            for (int i = 0; i < anlamliParcalar.Count; i++)
             {
-                anlamliParcalar = parcalar.Skip(1).ToList();
+                var p = anlamliParcalar[i];
+                if (p.Length > 5 && p.EndsWith("Value", StringComparison.Ordinal))
+                    anlamliParcalar[i] = p.Substring(0, p.Length - 5);
             }
 
-            // Son 2 anlamlı parçayı al
-            var sonParcalar = anlamliParcalar.TakeLast(2).ToList();
+            // Adım 5: Ardışık tekrar eden kökleri tekilleştir
+            // Örn: [Entity, Date, Date] → [Entity, Date]
+            // Örn: [Entity, IDNumber, ID] → [Entity, IDNumber] (IDNumber, ID'yi kapsar)
+            var tekilParcalar = new List<string>();
+            foreach (var p in anlamliParcalar)
+            {
+                if (tekilParcalar.Count > 0)
+                {
+                    var onceki = tekilParcalar[^1];
+                    // Tamamen aynı → atla
+                    if (string.Equals(onceki, p, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    // Önceki, yeniyi kapsar (IDNumber > ID) → yeniyi atla
+                    if (onceki.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    // Yeni, öncekini kapsar (CountryName > Country) → öncekini güncelle
+                    if (p.StartsWith(onceki, StringComparison.OrdinalIgnoreCase))
+                    {
+                        tekilParcalar[^1] = p;
+                        continue;
+                    }
+                }
+                tekilParcalar.Add(p);
+            }
 
-            return string.Join("_", sonParcalar.Select(SnakeCase));
+            // Adım 6: Son 3 parçadan ad oluştur
+            var tabloAdi = string.Join("_", tekilParcalar.TakeLast(3).Select(SnakeCase));
+            if (string.IsNullOrEmpty(tabloAdi)) tabloAdi = SnakeCase(parcalar.Last());
+
+            // Adım 7: Çakışma kontrolü → tüm parçaları kullan
+            if (mevcutAdlar.Contains(tabloAdi))
+            {
+                tabloAdi = string.Join("_", tekilParcalar.Select(SnakeCase));
+            }
+            return tabloAdi;
         }
 
         /// <summary>
-        /// Snake_case'e çevirir.
+        /// Container eleman adından yapısal suffix'leri sıyırarak kök adını çıkarır.
+        /// IDNumberTypes → IDNumber, SanctionsReferencesList → Sanctions,
+        /// DateDetails → Date, NameTypeList → NameType
         /// </summary>
-        private static string SnakeCase(string input)
+        private static string ContainerKokAdi(string containerAdi)
         {
-            if (string.IsNullOrWhiteSpace(input))
-                return "column";
+            var suffixes = new[] { "List", "Types", "References", "Details" };
+            var sonuc = containerAdi;
+            // Birden fazla suffix olabilir (SanctionsReferencesList → Sanctions)
+            bool degisti;
+            do
+            {
+                degisti = false;
+                foreach (var s in suffixes)
+                {
+                    if (sonuc.Length > s.Length && sonuc.EndsWith(s, StringComparison.OrdinalIgnoreCase))
+                    {
+                        sonuc = sonuc.Substring(0, sonuc.Length - s.Length);
+                        degisti = true;
+                    }
+                }
+            } while (degisti);
 
-            // Akronimleri önce küçük harfe çevir (ID, URL, XML, API vb.)
-            // "IDType" -> "IdType", "UserID" -> "UserId", "URL" -> "Url"
-            input = Regex.Replace(input, @"([A-Z]+)([A-Z][a-z])", "$1_$2"); // "IDType" -> "ID_Type"
-            input = Regex.Replace(input, @"([a-z])([A-Z])", "$1_$2");       // "userId" -> "user_Id"
-
-            // Tümünü küçük harfe çevir
-            input = input.ToLowerInvariant();
-
-            // Birden fazla alt çizgiyi teke indir ve temizle
-            input = Regex.Replace(input, @"_+", "_");
-            input = Regex.Replace(input, @"[^a-z0-9_]+", "_");
-
-            return input.Trim('_');
+            return string.IsNullOrEmpty(sonuc) ? containerAdi : sonuc;
         }
 
-        #region Yardımcı Sınıflar
+        private static void EntityIdSutunuEkle(List<SutunBilgisi> sutunlar, XElement ilkEleman)
+        {
+            if (ilkEleman == null) return;
+            bool entityAltinda = ilkEleman.Ancestors().Any(a =>
+                a.Name.LocalName.Equals("Entity", StringComparison.OrdinalIgnoreCase) ||
+                a.Name.LocalName.Equals("SpecialEntity", StringComparison.OrdinalIgnoreCase));
+            if (entityAltinda && !sutunlar.Any(s => s.Ad == "entity_id"))
+            {
+                sutunlar.Insert(0, new SutunBilgisi { Ad = "entity_id", Tip = SutunTipi.EntityId });
+            }
+        }
 
+        private static string SnakeCase(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "column";
+            string pattern = @"([A-Z]+)([A-Z][a-z])|([a-z0-9])([A-Z])";
+            return Regex.Replace(input, pattern, "$1$3_$2$4").ToLowerInvariant().Replace("__", "_");
+        }
+        #endregion
+
+        #region Yardımcı Sınıflar
         private class SutunBilgisi
         {
             public string Ad { get; set; } = "";
@@ -579,16 +509,8 @@ namespace XmlCsvMini.Services
 
         private enum SutunTipi
         {
-            Attribute,
-            Text,
-            ChildText,
-            ChildAttribute,
-            NestedText,
-            NestedAttribute,
-            ParentId,
-            EntityId
+            Attribute, Text, ChildText, ParentAttribute, ChildAttribute, EntityId
         }
-
         #endregion
     }
 }
