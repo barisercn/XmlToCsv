@@ -64,3 +64,4 @@ C:\Users\Barış\Desktop\TablolaraDonusturme\backend\xmlCsvMini\obj\Debug\net8.0
 C:\Users\Barış\Desktop\TablolaraDonusturme\backend\xmlCsvMini\obj\Debug\net8.0\XmlCsvMini.pdb
 C:\Users\Barış\Desktop\TablolaraDonusturme\backend\xmlCsvMini\obj\Debug\net8.0\XmlCsvMini.genruntimeconfig.cache
 C:\Users\Barış\Desktop\TablolaraDonusturme\backend\xmlCsvMini\obj\Debug\net8.0\ref\XmlCsvMini.dll
+C:\Users\Barış\Desktop\TablolaraDonusturme\backend\XmlCsvMini\bin\Debug\net8.0\mapping\default_mapping.json

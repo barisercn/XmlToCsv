@@ -1,0 +1,71 @@
+[33mcommit 9418374d6cbc93bbcae8393fd71d23023b3c3d02[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Thu Jan 29 11:27:25 2026 +0300
+
+    manuel olarak başarılı veri alma tablo yapısı dowjones 1.6
+
+[33mcommit 4a3caa5bb314f4afde27ad38f3b914c153365874[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Wed Jan 28 15:36:10 2026 +0300
+
+    dosyaları yükle
+
+[33mcommit 10b572470b744eef970b8100cc3c12468aa3cb6c[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Fri Dec 12 17:55:39 2025 +0300
+
+    eklemeler yapıldı
+
+[33mcommit 1513842e67a7aaedacdd6fc173b19f042ba2734f[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Thu Dec 11 00:53:11 2025 +0300
+
+    etiket okuma ve sutun hataları giderildi
+
+[33mcommit a73fc34e8f19b1305ecd15d85c4ff3cbd490a973[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Wed Dec 10 21:59:41 2025 +0300
+
+    var olan tablo devamı eklemesi
+
+[33mcommit 52702627a754c46e8ef775f727e1f0321a685e58[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Tue Dec 9 23:45:55 2025 +0300
+
+    id guncellemesi frontend
+
+[33mcommit f79be57ad2d2a184970912c53c451693560c975c[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Tue Dec 9 21:39:32 2025 +0300
+
+    yuklenen dosyanın id ile son durumunu ogrenme
+
+[33mcommit deef153d9dd5423c4159d10186dc7bbf659502ce[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Fri Dec 5 21:05:58 2025 +0300
+
+    Son duzenlemeler yapildi
+
+[33mcommit 3c9b79b92cad3e4d78734fbded219baaa0aa0c5c[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Thu Dec 4 19:12:55 2025 +0300
+
+    yeni guncelleme
+
+[33mcommit f4dfb5081a4f5e1d4349f7e69c1cf3ca2e1dd8c7[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Thu Nov 20 23:51:20 2025 +0300
+
+    Proje guncellendi
+
+[33mcommit 5573b7a0cc932b28ad4b34cf4e19b044afc2d3c5[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Tue Nov 18 16:25:33 2025 +0300
+
+    Proje guncellendi
+
+[33mcommit 6c3d8a933c890c93d259134cd7970f9d55ede6c1[m
+Author: Barış Ercan <ercanlar4773@gmail.com>
+Date:   Thu Oct 23 21:18:49 2025 +0300
+
+    Projenin ilk temiz versiyonu

@@ -146,6 +146,17 @@ namespace XmlCsvMini.Services
                     }
                 }
 
+                // Üst düzey referans/lookup tabloları: Root altındaki *List container'larının
+                // çocuklarını tekrar sayısına bakmadan ekle (Description1Name, Description2Name vb.)
+                // Bu elemanlar az kayıt içerebilir ama tabloya dönüşmeleri gerekir.
+                if (el.HasAttributes && el.Parent != null
+                    && containerSuffixes.Any(s => el.Parent.Name.LocalName.EndsWith(s, StringComparison.OrdinalIgnoreCase))
+                    && !el.Ancestors().Any(a => a.Name.LocalName.Equals("Entity", StringComparison.OrdinalIgnoreCase)
+                                             || a.Name.LocalName.Equals("SpecialEntity", StringComparison.OrdinalIgnoreCase)))
+                {
+                    sonuc.Add(yol);
+                }
+
                 var cocukGruplari = el.Elements().GroupBy(c => c.Name.LocalName).ToList();
                 bool parentIsContainer = el.Parent != null && containerSuffixes.Any(s => el.Parent.Name.LocalName.EndsWith(s, StringComparison.OrdinalIgnoreCase));
 
@@ -252,6 +263,31 @@ namespace XmlCsvMini.Services
             }
             sonuc.ExceptWith(anchorAtilacaklar);
 
+            // ═══════════════════════════════════════════════════════════════
+            // BUDAMA AŞAMASI 3: Parent-child duplicate tespiti
+            // Sadece parent ve child AYNI tablo adına resolve oluyorsa parent'ı sil.
+            // Örn: Date ve DateValue ikisi de "entity_date" → Date silinir.
+            // Ama Entity ve CompanyDetails farklı tablolar → Entity korunur.
+            // ═══════════════════════════════════════════════════════════════
+            var parentSilinecekler = new HashSet<string>();
+            var geciciAdlar = new HashSet<string>(); // çakışma kontrolü için boş set
+            foreach (var yol in sonuc.ToList())
+            {
+                if (yol.Count(c => c == '/') < 2) continue;
+                var parentPath = yol.Substring(0, yol.LastIndexOf('/'));
+                if (sonuc.Contains(parentPath))
+                {
+                    // İkisi de aynı tablo adına mı dönüşüyor?
+                    var childTabloAdi = TabloAdiOlustur(yol, geciciAdlar, gercekContainerAdlari, wrapperAdlari);
+                    var parentTabloAdi = TabloAdiOlustur(parentPath, geciciAdlar, gercekContainerAdlari, wrapperAdlari);
+                    if (string.Equals(childTabloAdi, parentTabloAdi, StringComparison.OrdinalIgnoreCase))
+                    {
+                        parentSilinecekler.Add(parentPath);
+                    }
+                }
+            }
+            sonuc.ExceptWith(parentSilinecekler);
+
             return (sonuc, gercekContainerAdlari, wrapperAdlari);
         }
 
@@ -261,13 +297,20 @@ namespace XmlCsvMini.Services
             if (!elemanlar.Any()) return sutunlar;
 
             // 1. Üst elementlerin niteliklerini topla (örn: Name'den NameType'ı almak için)
-            var tumUstNitelikler = elemanlar.Select(el => el.Parent).Where(p => p != null)
-                .SelectMany(p => p.Attributes())
-                .Where(a => !a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase))
-                .Select(a => a.Name.LocalName).Distinct();
-            foreach (var attrName in tumUstNitelikler)
+            // Sadece parent'ın kendisi ayrı bir tablo DEĞİLSE parent attribute'larını al
+            var parentYol = GetElementPath(elemanlar.First().Parent);
+            bool parentAyriTablo = tekrarlayanlar.Contains(parentYol);
+
+            if (!parentAyriTablo)
             {
-                sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(attrName), Tip = SutunTipi.ParentAttribute, Kaynak = attrName });
+                var tumUstNitelikler = elemanlar.Select(el => el.Parent).Where(p => p != null)
+                    .SelectMany(p => p.Attributes())
+                    .Where(a => !a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase))
+                    .Select(a => a.Name.LocalName).Distinct();
+                foreach (var attrName in tumUstNitelikler)
+                {
+                    sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(attrName), Tip = SutunTipi.ParentAttribute, Kaynak = attrName });
+                }
             }
 
             // 2. Kendi niteliklerini topla

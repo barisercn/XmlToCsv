@@ -1,0 +1,6 @@
+{
+  "containerSuffixes": [ "List", "Types", "References", "Details" ],
+  "anchorElements": [ "NameValue" ],
+  "mainRecordNodeNames": [ "Entity", "SpecialEntity" ],
+  "suffixesToRemoveFromTableNames": [ "Value" ]
+}
