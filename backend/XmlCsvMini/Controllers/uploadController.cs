@@ -176,26 +176,68 @@ namespace XmlCsvMini.Controllers
             }
             finally
             {
-                try
-                {
-                    // Girdi XML ve ara output klasörünü temizle
-                    // Bu blok artık try-catch'in ana gövdesi bittikten sonra çalışacağı için
-                    // dosya kilidi sorunu yaşanmayacak.
-                    if (System.IO.File.Exists(girdiXml))
-                        System.IO.File.Delete(girdiXml);
+                // Dosya handle'larının serbest bırakılmasını garanti et
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
 
-                    if (Directory.Exists(outputDirectory))
-                        Directory.Delete(outputDirectory, true);
+                // Retry ile temizlik: dosya kilidi gecikmeli kalkabilir
+                await Task.Delay(200);
 
-                    // ZIP dosyasını SİLMIYORUZ; download / dbyekaydet için lazım.
-                }
-                catch (Exception temizlikHatasi)
-                {
-                    _log.LogWarning(temizlikHatasi, "Job temizlik aşamasında hata oluştu. JobId={JobId}", gorevId);
-                }
+                TryDeleteFile(girdiXml, _log, gorevId);
+                TryDeleteDirectory(outputDirectory, _log, gorevId);
+                // ZIP dosyasını SİLMİYORUZ; download / dbyekaydet için lazım.
             }
         }
 
 
+        /// <summary>
+        /// Dosya silmeyi 3 kez dener (arada 500ms bekleme). Dosya kilidi gecikmeli kalkarsa yakalanır.
+        /// </summary>
+        private static void TryDeleteFile(string path, ILogger log, string gorevId)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                try
+                {
+                    if (System.IO.File.Exists(path))
+                        System.IO.File.Delete(path);
+                    return;
+                }
+                catch (IOException) when (i < 2)
+                {
+                    Thread.Sleep(500);
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(ex, "Dosya silinemedi: {Path}, JobId={JobId}", path, gorevId);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Klasör silmeyi 3 kez dener.
+        /// </summary>
+        private static void TryDeleteDirectory(string path, ILogger log, string gorevId)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                try
+                {
+                    if (Directory.Exists(path))
+                        Directory.Delete(path, true);
+                    return;
+                }
+                catch (IOException) when (i < 2)
+                {
+                    Thread.Sleep(500);
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(ex, "Klasör silinemedi: {Path}, JobId={JobId}", path, gorevId);
+                    return;
+                }
+            }
+        }
     }
 }

@@ -2,6 +2,14 @@ using Microsoft.AspNetCore.Http.Features;   // FormOptions için
 using XmlCsvMini.Services;
 using XmlCsvMini.Models;
 
+// --- Quick test mode ---
+if (args.Length >= 1 && args[0] == "--test-xml" && args.Length >= 2)
+{
+    var testOutput = Path.Combine(Path.GetTempPath(), "XmlCsvTest_" + Guid.NewGuid().ToString("N")[..8]);
+    TestRunner.Run(args[1], testOutput);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 💡 Kestrel web sunucusunun kabul edeceği maksimum istek gövdesi (body) boyutu.

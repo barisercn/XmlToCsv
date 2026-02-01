@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ComplianceData>
+
+    <Metadata>
+        <Source>External Compliance Provider</Source>
+        <ImportBatchId>IMP-2026-01-28-001</ImportBatchId>
+        <CreatedAt>2026-01-28T10:15:00Z</CreatedAt>
+    </Metadata>
+
+    <Dictionaries>
+
+        <CountryList>
+            <Country>
+                <CountryCode>TR</CountryCode>
+                <CountryName>Turkey</CountryName>
+            </Country>
+            <Country>
+                <CountryCode>US</CountryCode>
+                <CountryName>United States</CountryName>
+            </Country>
+        </CountryList>
+
+        <RoleTypeList>
+            <RoleType>
+                <RoleTypeId>1</RoleTypeId>
+                <RoleTypeName>Director</RoleTypeName>
+            </RoleType>
+            <RoleType>
+                <RoleTypeId>2</RoleTypeId>
+                <RoleTypeName>Shareholder</RoleTypeName>
+            </RoleType>
+        </RoleTypeList>
+
+        <RelationshipTypeList>
+            <RelationshipType>
+                <RelationshipTypeId>10</RelationshipTypeId>
+                <RelationshipName>EMPLOYED_BY</RelationshipName>
+            </RelationshipType>
+            <RelationshipType>
+                <RelationshipTypeId>11</RelationshipTypeId>
+                <RelationshipName>OWNS</RelationshipName>
+            </RelationshipType>
+        </RelationshipTypeList>
+
+        <IdTypeList>
+            <IdType>
+                <IdTypeId>100</IdTypeId>
+                <IdTypeName>NationalId</IdTypeName>
+            </IdType>
+            <IdType>
+                <IdTypeId>101</IdTypeId>
+                <IdTypeName>Passport</IdTypeName>
+            </IdType>
+        </IdTypeList>
+
+    </Dictionaries>
+
+    <Records>
+
+        <PersonList>
+            <Person>
+                <PersonId>P-1001</PersonId>
+
+                <NameDetails>
+                    <FirstName>Ahmet</FirstName>
+                    <LastName>Yılmaz</LastName>
+                    <FullName>Ahmet Yılmaz</FullName>
+                </NameDetails>
+
+                <BirthDetails>
+                    <BirthDate>1985-04-12</BirthDate>
+                    <BirthCountryCode>TR</BirthCountryCode>
+                </BirthDetails>
+
+                <NationalityList>
+                    <Nationality>TR</Nationality>
+                </NationalityList>
+
+                <IdentificationList>
+                    <Identification>
+                        <IdTypeId>100</IdTypeId>
+                        <IdValue>12345678901</IdValue>
+                    </Identification>
+                </IdentificationList>
+
+                <AddressList>
+                    <Address>
+                        <CountryCode>TR</CountryCode>
+                        <City>İstanbul</City>
+                    </Address>
+                </AddressList>
+
+            </Person>
+        </PersonList>
+
+        <EntityList>
+            <Entity>
+                <EntityId>E-9001</EntityId>
+                <EntityName>ABC Teknoloji A.Ş.</EntityName>
+                <CountryCode>TR</CountryCode>
+                <RegistrationNumber>TR-REG-556677</RegistrationNumber>
+
+                <EntityRoleList>
+                    <EntityRole>
+                        <RoleTypeId>1</RoleTypeId>
+                        <AssignedPersonId>P-1001</AssignedPersonId>
+                    </EntityRole>
+                </EntityRoleList>
+
+            </Entity>
+        </EntityList>
+
+    </Records>
+
+    <RelationshipList>
+
+        <Relationship>
+            <RelationshipTypeId>10</RelationshipTypeId>
+            <FromPersonId>P-1001</FromPersonId>
+            <ToEntityId>E-9001</ToEntityId>
+            <StartDate>2015-06-01</StartDate>
+        </Relationship>
+
+        <Relationship>
+            <RelationshipTypeId>11</RelationshipTypeId>
+            <FromPersonId>P-1001</FromPersonId>
+            <ToEntityId>E-9001</ToEntityId>
+            <OwnershipPercentage>40</OwnershipPercentage>
+        </Relationship>
+
+    </RelationshipList>
+
+</ComplianceData>

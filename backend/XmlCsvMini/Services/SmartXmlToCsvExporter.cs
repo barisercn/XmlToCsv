@@ -37,12 +37,7 @@ namespace XmlCsvMini.Services
 
             Console.WriteLine($"XML yüklendi. Root: {doc.Root.Name.LocalName}");
 
-            // Anchor Entity tespiti: root altında (wrapper'lar atlanarak) en çok tekrar eden karmaşık eleman
-            var anchorInfo = AnchorEntityBul(doc.Root);
-            if (anchorInfo.ad != null)
-                Console.WriteLine($"Anchor Entity: {anchorInfo.ad} (id attr: {anchorInfo.idAttr ?? "yok"})");
-
-            var (tekrarlayanlar, gercekContainerAdlari, wrapperAdlari) = TekrarlayanElemanlariTespit(doc.Root, anchorInfo.ad);
+            var (tekrarlayanlar, gercekContainerAdlari, wrapperAdlari) = TekrarlayanElemanlariTespit(doc.Root);
             Console.WriteLine($"\nOluşturulacak tablolar ({tekrarlayanlar.Count}):");
             foreach (var t in tekrarlayanlar.OrderBy(p => p).Take(50)) Console.WriteLine($"  - {t}");
             Console.WriteLine($"\nGerçek container'lar: {string.Join(", ", gercekContainerAdlari.OrderBy(x => x))}");
@@ -61,91 +56,19 @@ namespace XmlCsvMini.Services
                 Console.WriteLine($"\nTablo oluşturuluyor: {tabloAdi}");
                 Console.WriteLine($"  {elemanlar.Count} kayıt bulundu");
 
-                var sutunlar = SutunlariBelirle(elemanlar, tekrarlayanlar);
-                AnchorIdSutunuEkle(sutunlar, elemanlar.First(), anchorInfo.ad, anchorInfo.idAttr);
+                var sutunlar = SutunlariBelirle(elemanlar, tekrarlayanlar, wrapperAdlari);
+                ForeignKeySutunuEkle(sutunlar, elemanlar.First(), tekrarlayanlar);
 
                 var siraliSutunlar = sutunlar.OrderBy(s => s.Ad).ToList();
 
                 Console.WriteLine($"  Sütunlar: {string.Join(", ", siraliSutunlar.Select(s => s.Ad))}");
 
-                YazCsv(csvYolu, elemanlar, siraliSutunlar, anchorInfo.ad, anchorInfo.idAttr);
+                YazCsv(csvYolu, elemanlar, siraliSutunlar);
 
                 olusturulanTabloAdlari.Add(tabloAdi);
             }
 
             Console.WriteLine($"\nToplam {olusturulanTabloAdlari.Count} tablo oluşturuldu.");
-        }
-
-        /// <summary>
-        /// Root altında (wrapper'lar atlanarak) en çok tekrar eden karmaşık elemanı bulur.
-        /// Bu eleman "Anchor Entity" olur ve alt tablolara id sütunu olarak eklenir.
-        /// </summary>
-        private static (string? ad, string? idAttr) AnchorEntityBul(XElement root)
-        {
-            // Root'un doğrudan çocuklarını tara, wrapper olanları atla
-            var adaylar = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-            void TaraAday(XElement el)
-            {
-                foreach (var cocuk in el.Elements())
-                {
-                    var ad = cocuk.Name.LocalName;
-                    if (cocuk.HasElements || cocuk.HasAttributes)
-                    {
-                        // Karmaşık eleman
-                        if (!adaylar.ContainsKey(ad))
-                            adaylar[ad] = 0;
-                        adaylar[ad]++;
-                    }
-                }
-            }
-
-            // Önce root'un doğrudan çocuklarına bak
-            foreach (var cocuk in root.Elements())
-            {
-                var ad = cocuk.Name.LocalName;
-                if (cocuk.HasElements || cocuk.HasAttributes)
-                {
-                    if (!adaylar.ContainsKey(ad))
-                        adaylar[ad] = 0;
-                    adaylar[ad]++;
-                }
-            }
-
-            // Eğer root altında çok tekrar eden yoksa, bir seviye daha in (wrapper atla)
-            if (!adaylar.Any(kv => kv.Value > 1))
-            {
-                adaylar.Clear();
-                foreach (var cocuk in root.Elements())
-                {
-                    // Bu bir wrapper mı? (attribute'sız, text'siz, çocukları var)
-                    if (!cocuk.HasAttributes && cocuk.HasElements
-                        && !cocuk.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)))
-                    {
-                        TaraAday(cocuk);
-                    }
-                }
-            }
-
-            if (!adaylar.Any(kv => kv.Value > 1))
-                return (null, null);
-
-            var enCokTekrar = adaylar.OrderByDescending(kv => kv.Value).First();
-            var anchorAd = enCokTekrar.Key;
-
-            // id attribute adını bul: ilk örneğe bak
-            string? idAttr = null;
-            var ornekEl = root.Descendants()
-                .FirstOrDefault(d => d.Name.LocalName.Equals(anchorAd, StringComparison.OrdinalIgnoreCase));
-            if (ornekEl != null)
-            {
-                // "id" adlı attribute'u ara
-                var idA = ornekEl.Attributes()
-                    .FirstOrDefault(a => a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase));
-                idAttr = idA?.Name.LocalName;
-            }
-
-            return (anchorAd, idAttr);
         }
 
         /// <summary>
@@ -172,7 +95,7 @@ namespace XmlCsvMini.Services
         /// <summary>
         /// Tekrarlayan elemanları tespit eder ve hangi eleman adlarının gerçek container olduğunu belirler.
         /// </summary>
-        private static (HashSet<string> tekrarlayanlar, HashSet<string> gercekContainerAdlari, HashSet<string> wrapperAdlari) TekrarlayanElemanlariTespit(XElement root, string? anchorEntityAdi)
+        private static (HashSet<string> tekrarlayanlar, HashSet<string> gercekContainerAdlari, HashSet<string> wrapperAdlari) TekrarlayanElemanlariTespit(XElement root)
         {
             var sonuc = new HashSet<string>();
             var containerCache = new Dictionary<XElement, bool>(ReferenceEqualityComparer.Instance);
@@ -182,9 +105,6 @@ namespace XmlCsvMini.Services
 
             // Wrapper tespiti
             var wrapperAdayi = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-
-            // Anchor value tespiti
-            var anchorValueAdlari = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             void Tara(XElement el, string yol, bool parentContainer)
             {
@@ -219,34 +139,14 @@ namespace XmlCsvMini.Services
                         containerVeriDurumu[elAdi] = true;
                 }
 
-                // Veri taşıyan container elemanları → anchor entity altındaysa ayrı tablo adayı
+                // Veri taşıyan container elemanları → ayrı tablo adayı
                 if (containerVeriDurumu.TryGetValue(elAdi, out var tasiyor) && tasiyor)
                 {
-                    if (anchorEntityAdi != null &&
-                        el.Ancestors().Any(a => a.Name.LocalName.Equals(anchorEntityAdi, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        sonuc.Add(yol);
-                    }
-                }
-
-                // ── Anchor Value tespiti ──
-                if (elAdi.EndsWith("Value", StringComparison.Ordinal)
-                    || elAdi.EndsWith("Item", StringComparison.Ordinal)
-                    || elAdi.EndsWith("Data", StringComparison.Ordinal))
-                {
-                    if (anchorEntityAdi != null &&
-                        el.Ancestors().Any(a => a.Name.LocalName.Equals(anchorEntityAdi, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        sonuc.Add(yol);
-                        anchorValueAdlari.Add(elAdi);
-                    }
+                    sonuc.Add(yol);
                 }
 
                 // Üst düzey referans/lookup tabloları
-                if (el.HasAttributes && el.Parent != null
-                    && parentContainer
-                    && anchorEntityAdi != null
-                    && !el.Ancestors().Any(a => a.Name.LocalName.Equals(anchorEntityAdi, StringComparison.OrdinalIgnoreCase)))
+                if (el.HasAttributes && el.Parent != null && parentContainer)
                 {
                     sonuc.Add(yol);
                 }
@@ -259,7 +159,7 @@ namespace XmlCsvMini.Services
                     {
                         sonuc.Add(cocukYol);
                     }
-                    else if (parentContainer)
+                    else if (parentContainer || elContainer)
                     {
                         if (grup.Any(e => e.HasElements || e.HasAttributes))
                         {
@@ -293,6 +193,35 @@ namespace XmlCsvMini.Services
             }
 
             // ═══════════════════════════════════════════════════════════════
+            // META-WRAPPER: Tüm çocukları container veya wrapper olan elemanları da wrapper yap
+            // ═══════════════════════════════════════════════════════════════
+            bool degisti;
+            do
+            {
+                degisti = false;
+                foreach (var kvp in wrapperAdayi.ToList())
+                {
+                    if (kvp.Value) continue; // zaten wrapper adayı
+                    if (gercekContainerAdlari.Contains(kvp.Key)) continue;
+                    // Bu eleman adının tüm örneklerini kontrol et
+                    var ornekler = root.Descendants().Where(d => d.Name.LocalName.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (ornekler.Count == 0) continue;
+                    bool hepsiMetaWrapper = ornekler.All(el =>
+                        el.HasElements && !el.HasAttributes
+                        && !el.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value))
+                        && el.Elements().All(c =>
+                            gercekContainerAdlari.Contains(c.Name.LocalName)
+                            || wrapperAdlari.Contains(c.Name.LocalName)));
+                    if (hepsiMetaWrapper)
+                    {
+                        wrapperAdlari.Add(kvp.Key);
+                        wrapperAdayi[kvp.Key] = true;
+                        degisti = true;
+                    }
+                }
+            } while (degisti);
+
+            // ═══════════════════════════════════════════════════════════════
             // BUDAMA AŞAMASI 1: Gerçek container'ları sil
             // ═══════════════════════════════════════════════════════════════
             var atilacaklar = new HashSet<string>();
@@ -312,43 +241,11 @@ namespace XmlCsvMini.Services
             sonuc.ExceptWith(atilacaklar);
 
             // ═══════════════════════════════════════════════════════════════
-            // BUDAMA AŞAMASI 2: Anchor tablo absorpsiyonu
-            // Anchor tablo = *Value, *Item, *Data ile biten veya tek karmaşık çocuğu olan parent'ın child'ı
-            // ═══════════════════════════════════════════════════════════════
-            var anchorAtilacaklar = new HashSet<string>();
-            foreach (var yol in sonuc.ToList())
-            {
-                var elAdi = yol.Split('/').Last();
-                if (!anchorValueAdlari.Contains(elAdi)) continue;
-
-                // 2a. Çocuk path'leri sil → sütun olarak kalacaklar
-                foreach (var digerYol in sonuc)
-                {
-                    if (digerYol.StartsWith(yol + "/"))
-                        anchorAtilacaklar.Add(digerYol);
-                }
-
-                // 2b. Parent path'i sil → attribute olarak anchor'a geçecek
-                var parentPath = yol.Substring(0, yol.LastIndexOf('/'));
-                if (sonuc.Contains(parentPath))
-                {
-                    var parentElemanlar = BulElemanlar(root, parentPath);
-                    bool parentSadeceWrapper = !parentElemanlar.Any(pe =>
-                        pe.Elements().Any(c => !c.HasElements && !c.HasAttributes
-                                            && !string.IsNullOrWhiteSpace(c.Value)));
-                    if (parentSadeceWrapper)
-                    {
-                        anchorAtilacaklar.Add(parentPath);
-                        Console.WriteLine($"  [Anchor] {elAdi} parent'ı absorbe etti: {parentPath.Split('/').Last()}");
-                    }
-                }
-            }
-            sonuc.ExceptWith(anchorAtilacaklar);
-
-            // ═══════════════════════════════════════════════════════════════
             // BUDAMA AŞAMASI 3: Parent-child duplicate tespiti
+            // Wrapper child ile parent aynı tablo adı üretirse → child silinir
+            // (parent daha zengin veri taşır). Diğer durumlarda → parent silinir.
             // ═══════════════════════════════════════════════════════════════
-            var parentSilinecekler = new HashSet<string>();
+            var duplicateSilinecekler = new HashSet<string>();
             var geciciAdlar = new HashSet<string>();
             foreach (var yol in sonuc.ToList())
             {
@@ -360,16 +257,57 @@ namespace XmlCsvMini.Services
                     var parentTabloAdi = TabloAdiOlustur(parentPath, geciciAdlar, gercekContainerAdlari, wrapperAdlari);
                     if (string.Equals(childTabloAdi, parentTabloAdi, StringComparison.OrdinalIgnoreCase))
                     {
-                        parentSilinecekler.Add(parentPath);
+                        // Child'ın son segmenti wrapper ise → child gereksiz, parent'ı koru
+                        var childLastSegment = yol.Split('/').Last();
+                        if (wrapperAdlari.Contains(childLastSegment))
+                            duplicateSilinecekler.Add(yol);       // wrapper child'ı sil
+                        else
+                            duplicateSilinecekler.Add(parentPath); // orijinal davranış
                     }
                 }
             }
-            sonuc.ExceptWith(parentSilinecekler);
+            sonuc.ExceptWith(duplicateSilinecekler);
+
+            // ═══════════════════════════════════════════════════════════════
+            // BUDAMA AŞAMASI 4: 1:1 Flatten — sadece leaf çocukları olan,
+            // parent'ı da tablo olan, parent başına en fazla 1 kez görünen tabloları
+            // parent'a flatten et (ayrı tablo olmasın).
+            // ═══════════════════════════════════════════════════════════════
+            var flattenSilinecekler = new HashSet<string>();
+            foreach (var yol in sonuc.ToList())
+            {
+                if (yol.Count(c => c == '/') < 2) continue;
+                var parentPath = yol.Substring(0, yol.LastIndexOf('/'));
+
+                // Parent de tablo olmalı
+                if (!sonuc.Contains(parentPath)) continue;
+
+                var elAdi = yol.Split('/').Last();
+
+                // Elemanları bul
+                var elemanlar = BulElemanlar(root, yol);
+                if (elemanlar.Count == 0) continue;
+
+                // Sadece leaf çocukları olmalı (karmaşık alt eleman yok)
+                bool sadeceLeaf = elemanlar.All(el =>
+                    !el.Elements().Any(c => c.HasElements));
+                if (!sadeceLeaf) continue;
+
+                // Parent başına en fazla 1 kez görünmeli
+                var parentElemanlar = BulElemanlar(root, parentPath);
+                bool tekOrnek = parentElemanlar.All(pe =>
+                    pe.Elements().Count(c => c.Name.LocalName.Equals(elAdi, StringComparison.OrdinalIgnoreCase)) <= 1);
+                if (!tekOrnek) continue;
+
+                flattenSilinecekler.Add(yol);
+                Console.WriteLine($"  [Flatten] {elAdi} → parent'a flatten edildi");
+            }
+            sonuc.ExceptWith(flattenSilinecekler);
 
             return (sonuc, gercekContainerAdlari, wrapperAdlari);
         }
 
-        private static List<SutunBilgisi> SutunlariBelirle(List<XElement> elemanlar, HashSet<string> tekrarlayanlar)
+        private static List<SutunBilgisi> SutunlariBelirle(List<XElement> elemanlar, HashSet<string> tekrarlayanlar, HashSet<string> wrapperAdlari)
         {
             var sutunlar = new List<SutunBilgisi>();
             if (!elemanlar.Any()) return sutunlar;
@@ -410,12 +348,34 @@ namespace XmlCsvMini.Services
                 {
                     sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(cocukAdi), Tip = SutunTipi.ChildText, Kaynak = cocukAdi });
                 }
+                else if (wrapperAdlari.Contains(cocukAdi))
+                {
+                    // ── Wrapper çocuk: unwrap et, torun adlarını doğrudan kullan ──
+                    // Örn: NationalityList/Nationality → sütun adı "nationality" (prefix yok)
+                    var torunAdlari = grup.SelectMany(c => c.Elements())
+                        .Where(t => !t.HasElements)
+                        .Select(t => t.Name.LocalName).Distinct();
+                    foreach (var torunAdi in torunAdlari)
+                    {
+                        sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(torunAdi), Tip = SutunTipi.GrandchildText, Kaynak = cocukAdi, AltKaynak = torunAdi });
+                    }
+                }
                 else
                 {
+                    // Karmaşık çocuk ayrı tablo değil → attribute ve leaf torunlarını sütun yap
                     var tumCocukNitelikleri = grup.SelectMany(c => c.Attributes()).Select(a => a.Name.LocalName).Distinct();
                     foreach (var attrName in tumCocukNitelikleri)
                     {
                         sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(cocukAdi + "_" + attrName), Tip = SutunTipi.ChildAttribute, Kaynak = cocukAdi, AltKaynak = attrName });
+                    }
+
+                    // Leaf torun elemanlarını da sütun yap (GrandchildText)
+                    var torunAdlari = grup.SelectMany(c => c.Elements())
+                        .Where(t => !t.HasElements)
+                        .Select(t => t.Name.LocalName).Distinct();
+                    foreach (var torunAdi in torunAdlari)
+                    {
+                        sutunlar.Add(new SutunBilgisi { Ad = SnakeCase(cocukAdi + "_" + torunAdi), Tip = SutunTipi.GrandchildText, Kaynak = cocukAdi, AltKaynak = torunAdi });
                     }
                 }
             }
@@ -428,7 +388,7 @@ namespace XmlCsvMini.Services
             return sutunlar.GroupBy(s => s.Ad).Select(g => g.First()).ToList();
         }
 
-        private static void YazCsv(string csvYolu, List<XElement> elemanlar, List<SutunBilgisi> sutunlar, string? anchorEntityAdi, string? anchorIdAttr)
+        private static void YazCsv(string csvYolu, List<XElement> elemanlar, List<SutunBilgisi> sutunlar)
         {
             using var sw = new StreamWriter(csvYolu, false, new UTF8Encoding(true));
             using var csv = new CsvWriter(sw, new CsvConfiguration(CultureInfo.InvariantCulture) { Delimiter = ";", HasHeaderRecord = true });
@@ -440,21 +400,22 @@ namespace XmlCsvMini.Services
             {
                 foreach (var sutun in sutunlar)
                 {
-                    csv.WriteField(DegerCek(el, sutun, anchorEntityAdi, anchorIdAttr));
+                    csv.WriteField(DegerCek(el, sutun));
                 }
                 csv.NextRecord();
             }
         }
 
-        private static string DegerCek(XElement el, SutunBilgisi sutun, string? anchorEntityAdi, string? anchorIdAttr)
+        private static string DegerCek(XElement el, SutunBilgisi sutun)
         {
             switch (sutun.Tip)
             {
-                case SutunTipi.AnchorId:
-                    if (anchorEntityAdi == null || anchorIdAttr == null) return "";
-                    var ancestor = el.Ancestors().FirstOrDefault(a =>
-                        a.Name.LocalName.Equals(anchorEntityAdi, StringComparison.OrdinalIgnoreCase));
-                    return ancestor?.Attribute(anchorIdAttr)?.Value ?? "";
+                case SutunTipi.ForeignKey:
+                    // Kaynak = ancestor element name, AltKaynak = id resolution method
+                    var ata = el.Ancestors().FirstOrDefault(a =>
+                        a.Name.LocalName.Equals(sutun.Kaynak, StringComparison.OrdinalIgnoreCase));
+                    if (ata == null) return "";
+                    return AtaIdDegeriBul(ata);
                 case SutunTipi.ParentAttribute:
                     return el.Parent?.Attribute(sutun.Kaynak)?.Value ?? "";
                 case SutunTipi.Attribute:
@@ -465,9 +426,41 @@ namespace XmlCsvMini.Services
                     return el.Element(sutun.Kaynak)?.Value?.Trim() ?? "";
                 case SutunTipi.ChildAttribute:
                     return el.Element(sutun.Kaynak)?.Attribute(sutun.AltKaynak)?.Value ?? "";
+                case SutunTipi.GrandchildText:
+                    return el.Element(sutun.Kaynak)?.Element(sutun.AltKaynak)?.Value?.Trim() ?? "";
                 default:
                     return "";
             }
+        }
+
+        /// <summary>
+        /// Bir ata elemanın ID değerini bulur:
+        /// 1. "id" attribute
+        /// 2. {ElemanAdı}Id child element
+        /// 3. İlk *Id child element
+        /// </summary>
+        private static string AtaIdDegeriBul(XElement ata)
+        {
+            // 1. "id" attribute
+            var idAttr = ata.Attributes()
+                .FirstOrDefault(a => a.Name.LocalName.Equals("id", StringComparison.OrdinalIgnoreCase));
+            if (idAttr != null) return idAttr.Value;
+
+            var ataAdi = ata.Name.LocalName;
+
+            // 2. {ElemanAdı}Id child
+            var ozelIdChild = ata.Elements()
+                .FirstOrDefault(c => c.Name.LocalName.Equals(ataAdi + "Id", StringComparison.OrdinalIgnoreCase)
+                                  || c.Name.LocalName.Equals(ataAdi + "_id", StringComparison.OrdinalIgnoreCase));
+            if (ozelIdChild != null && !ozelIdChild.HasElements) return ozelIdChild.Value?.Trim() ?? "";
+
+            // 3. İlk *Id child
+            var ilkIdChild = ata.Elements()
+                .FirstOrDefault(c => c.Name.LocalName.EndsWith("Id", StringComparison.Ordinal)
+                                  || c.Name.LocalName.EndsWith("_id", StringComparison.Ordinal));
+            if (ilkIdChild != null && !ilkIdChild.HasElements) return ilkIdChild.Value?.Trim() ?? "";
+
+            return "";
         }
 
         #region Yardımcı Metotlar
@@ -590,17 +583,29 @@ namespace XmlCsvMini.Services
             return string.IsNullOrEmpty(sonuc) ? containerAdi : sonuc;
         }
 
-        private static void AnchorIdSutunuEkle(List<SutunBilgisi> sutunlar, XElement ilkEleman, string? anchorEntityAdi, string? anchorIdAttr)
+        /// <summary>
+        /// En yakın ata-tabloyu bulur ve onun ID'sini FK olarak ekler.
+        /// </summary>
+        private static void ForeignKeySutunuEkle(List<SutunBilgisi> sutunlar, XElement ilkEleman, HashSet<string> tekrarlayanlar)
         {
-            if (ilkEleman == null || anchorEntityAdi == null || anchorIdAttr == null) return;
+            if (ilkEleman == null) return;
 
-            bool anchorAltinda = ilkEleman.Ancestors().Any(a =>
-                a.Name.LocalName.Equals(anchorEntityAdi, StringComparison.OrdinalIgnoreCase));
-
-            var sutunAdi = SnakeCase(anchorEntityAdi) + "_id";
-            if (anchorAltinda && !sutunlar.Any(s => s.Ad == sutunAdi))
+            // Ata elemanları yukarı doğru tara, ilk tablo olan atayı bul
+            var ata = ilkEleman.Parent;
+            while (ata != null)
             {
-                sutunlar.Insert(0, new SutunBilgisi { Ad = sutunAdi, Tip = SutunTipi.AnchorId });
+                var ataYol = GetElementPath(ata);
+                if (tekrarlayanlar.Contains(ataYol))
+                {
+                    var ataAdi = ata.Name.LocalName;
+                    var sutunAdi = SnakeCase(ataAdi) + "_id";
+                    if (!sutunlar.Any(s => s.Ad == sutunAdi))
+                    {
+                        sutunlar.Insert(0, new SutunBilgisi { Ad = sutunAdi, Tip = SutunTipi.ForeignKey, Kaynak = ataAdi });
+                    }
+                    break;
+                }
+                ata = ata.Parent;
             }
         }
 
@@ -623,7 +628,7 @@ namespace XmlCsvMini.Services
 
         private enum SutunTipi
         {
-            Attribute, Text, ChildText, ParentAttribute, ChildAttribute, AnchorId
+            Attribute, Text, ChildText, ParentAttribute, ChildAttribute, ForeignKey, GrandchildText
         }
         #endregion
     }
